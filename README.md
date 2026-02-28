@@ -62,8 +62,8 @@ x = R.gen()
 f = x**3
 g = x**5
 
-auto = ccz.ccz_auto(f, n_bits=n, field=K)
-eq = ccz.ccz_equivalence(f, g, n_bits=n, field=K)
+auto = ccz.ccz_auto(f)
+eq = ccz.ccz_equivalence(f, g)
 
 print(auto["order"], eq is not None)
 ```

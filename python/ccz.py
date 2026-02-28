@@ -97,6 +97,18 @@ except Exception:
 IntFn = Callable[[int], int]
 
 
+def _coerce_int_maybe(value: Any) -> Optional[int]:
+    if callable(value):
+        try:
+            value = value()
+        except Exception:
+            return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
 def _is_galois_poly(obj: Any) -> bool:
     cls = obj.__class__
     module = getattr(cls, "__module__", "")
@@ -105,18 +117,19 @@ def _is_galois_poly(obj: Any) -> bool:
 
 
 def _infer_n_bits_from_field(field: Any) -> Optional[int]:
-    degree = getattr(field, "degree", None)
-    if degree is not None:
-        try:
-            n = int(degree)
-            if n > 0:
-                return n
-        except Exception:
-            pass
+    degree = _coerce_int_maybe(getattr(field, "degree", None))
+    if degree is not None and degree > 0:
+        return degree
 
-    order = getattr(field, "order", None)
-    if isinstance(order, int) and order > 0 and (order & (order - 1)) == 0:
+    order = _coerce_int_maybe(getattr(field, "order", None))
+    if order is not None and order > 0 and (order & (order - 1)) == 0:
         n = order.bit_length() - 1
+        if n > 0:
+            return n
+
+    cardinality = _coerce_int_maybe(getattr(field, "cardinality", None))
+    if cardinality is not None and cardinality > 0 and (cardinality & (cardinality - 1)) == 0:
+        n = cardinality.bit_length() - 1
         if n > 0:
             return n
 
@@ -233,11 +246,24 @@ def _resolve_bits_single(
             raise ValueError("galois polynomial mode requires m_bits == n_bits")
         return n, m, ff
 
+    inferred_field = _field_from_callable(values_or_fn)
+    if n_bits is None and inferred_field is not None:
+        n = _infer_n_bits_from_field(inferred_field)
+        if n is not None:
+            m = n if m_bits is None else int(m_bits)
+            if m != n:
+                raise ValueError(
+                    "polynomial/field callable mode currently requires m_bits == n_bits"
+                )
+            return n, m, inferred_field
+
     if n_bits is None:
-        raise ValueError("`n_bits` is required unless input is a galois polynomial")
+        raise ValueError(
+            "`n_bits` is required unless input carries inferable field metadata"
+        )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
-    return n, m, None
+    return n, m, inferred_field
 
 
 def _resolve_bits_pair(
@@ -279,11 +305,36 @@ def _resolve_bits_pair(
             raise ValueError("galois polynomial mode requires m_bits == n_bits")
         return n, m, f_field, g_field
 
+    f_field = _field_from_callable(f_values_or_fn)
+    g_field = _field_from_callable(g_values_or_fn)
+    if n_bits is None and (f_field is not None or g_field is not None):
+        inferred: list[int] = []
+        if f_field is not None:
+            f_n = _infer_n_bits_from_field(f_field)
+            if f_n is not None:
+                inferred.append(f_n)
+        if g_field is not None:
+            g_n = _infer_n_bits_from_field(g_field)
+            if g_n is not None:
+                inferred.append(g_n)
+        if inferred:
+            if len(set(inferred)) != 1:
+                raise ValueError("inputs must have the same inferred field degree")
+            n = inferred[0]
+            m = n if m_bits is None else int(m_bits)
+            if m != n:
+                raise ValueError(
+                    "polynomial/field callable mode currently requires m_bits == n_bits"
+                )
+            return n, m, f_field, g_field
+
     if n_bits is None:
-        raise ValueError("`n_bits` is required unless input is a galois polynomial")
+        raise ValueError(
+            "`n_bits` is required unless input carries inferable field metadata"
+        )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
-    return n, m, None, None
+    return n, m, f_field, g_field
 
 
 def ccz_auto(
