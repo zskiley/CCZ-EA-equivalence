@@ -1,0 +1,45 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C++: ccz_auto_run",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\build\\bin\\ccz_auto_run.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "console": "externalTerminal",
+      "preLaunchTask": "build ccz_auto_run"
+    },
+    {
+      "name": "Python: Current File (External Terminal)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "externalTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Current File (Terminal)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "purpose": ["debug-in-terminal"]
+    },
+    {
+      "name": "Run example_bindings.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/example_bindings.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
