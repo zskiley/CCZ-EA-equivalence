@@ -48,6 +48,26 @@ else:
     print("CCZ equivalent; map size:", len(eq))
 ```
 
+### SageMath polynomial usage
+
+```python
+import ccz
+from sage.all import GF, PolynomialRing
+
+n = 9
+K = GF(2**n, name="a")
+R = PolynomialRing(K, "x")
+x = R.gen()
+
+f = x**3
+g = x**5
+
+auto = ccz.ccz_auto(f, n_bits=n, field=K)
+eq = ccz.ccz_equivalence(f, g, n_bits=n, field=K)
+
+print(auto["order"], eq is not None)
+```
+
 ## Available API
 
 - `ccz.ccz_auto(values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None)`
