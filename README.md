@@ -24,9 +24,10 @@ import galois
 
 n = 9
 F = galois.GF(2**n)
+x = galois.Poly.Identity(F)
 
-f = galois.Poly([1, 0, 0, 0], field=F)        # x^3
-g = galois.Poly([1, 0, 0, 0, 0, 0], field=F)  # x^5
+f = x**3
+g = x**5
 
 auto = ccz.ccz_auto(f, field=F)
 eq = ccz.ccz_equivalence(f, g, field=F)
@@ -42,8 +43,9 @@ import galois
 
 n = 9
 F = galois.GF(2**n)
-f = galois.Poly([1, 0, 0, 0], field=F)           # x^3
-g = galois.Poly([1, 0, 0, 0, 0, 0, 0], field=F)  # x^6
+x = galois.Poly.Identity(F)
+f = x**3
+g = x**6
 
 eq = ccz.ccz_equivalence(f, g, field=F)
 
@@ -61,9 +63,10 @@ import galois
 
 n = 9
 F = galois.GF(2**n)
+x = galois.Poly.Identity(F)
 
-f = galois.Poly([1, 0, 0, 0], field=F)        # x^3
-g = galois.Poly([1, 0, 0, 0, 0, 0], field=F)  # x^5
+f = x**3
+g = x**5
 
 auto = ccz.ccz_auto(f, field=F)
 eq = ccz.ccz_equivalence(f, g, field=F)
