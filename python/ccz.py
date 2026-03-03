@@ -233,6 +233,7 @@ def _resolve_bits_single(
     values_or_fn: Iterable[int] | IntFn | Any,
     n_bits: Optional[int],
     m_bits: Optional[int],
+    field: Any = None,
 ) -> tuple[int, int, Any]:
     if _is_galois_poly(values_or_fn):
         if n_bits is not None:
@@ -247,19 +248,21 @@ def _resolve_bits_single(
         return n, m, ff
 
     inferred_field = _field_from_callable(values_or_fn)
-    if n_bits is None and inferred_field is not None:
-        n = _infer_n_bits_from_field(inferred_field)
-        if n is not None:
-            m = n if m_bits is None else int(m_bits)
-            if m != n:
-                raise ValueError(
-                    "polynomial/field callable mode currently requires m_bits == n_bits"
-                )
-            return n, m, inferred_field
+    if n_bits is None:
+        candidate_field = inferred_field if inferred_field is not None else field
+        if candidate_field is not None:
+            n = _infer_n_bits_from_field(candidate_field)
+            if n is not None:
+                m = n if m_bits is None else int(m_bits)
+                if m != n:
+                    raise ValueError(
+                        "polynomial/field callable mode currently requires m_bits == n_bits"
+                    )
+                return n, m, candidate_field
 
     if n_bits is None:
         raise ValueError(
-            "`n_bits` is required unless input carries inferable field metadata"
+            "`n_bits` is required unless input or `field` carries inferable field metadata"
         )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
@@ -271,6 +274,7 @@ def _resolve_bits_pair(
     g_values_or_fn: Iterable[int] | IntFn | Any,
     n_bits: Optional[int],
     m_bits: Optional[int],
+    field: Any = None,
 ) -> tuple[int, int, Any, Any]:
     f_is_galois_poly = _is_galois_poly(f_values_or_fn)
     g_is_galois_poly = _is_galois_poly(g_values_or_fn)
@@ -307,7 +311,7 @@ def _resolve_bits_pair(
 
     f_field = _field_from_callable(f_values_or_fn)
     g_field = _field_from_callable(g_values_or_fn)
-    if n_bits is None and (f_field is not None or g_field is not None):
+    if n_bits is None:
         inferred: list[int] = []
         if f_field is not None:
             f_n = _infer_n_bits_from_field(f_field)
@@ -317,6 +321,10 @@ def _resolve_bits_pair(
             g_n = _infer_n_bits_from_field(g_field)
             if g_n is not None:
                 inferred.append(g_n)
+        if not inferred and field is not None:
+            field_n = _infer_n_bits_from_field(field)
+            if field_n is not None:
+                inferred.append(field_n)
         if inferred:
             if len(set(inferred)) != 1:
                 raise ValueError("inputs must have the same inferred field degree")
@@ -326,11 +334,13 @@ def _resolve_bits_pair(
                 raise ValueError(
                     "polynomial/field callable mode currently requires m_bits == n_bits"
                 )
-            return n, m, f_field, g_field
+            return n, m, (f_field if f_field is not None else field), (
+                g_field if g_field is not None else field
+            )
 
     if n_bits is None:
         raise ValueError(
-            "`n_bits` is required unless input carries inferable field metadata"
+            "`n_bits` is required unless input or `field` carries inferable field metadata"
         )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
@@ -345,7 +355,7 @@ def ccz_auto(
     field: Any = None,
     min_active_hyperplanes: Optional[int] = None,
 ):
-    n, m, inferred_field = _resolve_bits_single(values_or_fn, n_bits, m_bits)
+    n, m, inferred_field = _resolve_bits_single(values_or_fn, n_bits, m_bits, field)
     eval_field = inferred_field if inferred_field is not None else field
     tt = _to_truth_table(values_or_fn, n, m, field=eval_field)
     return _core.ccz_auto(tt, n, m, time_limit_seconds, min_active_hyperplanes)
@@ -359,7 +369,7 @@ def ea_auto(
     field: Any = None,
     min_active_hyperplanes: Optional[int] = None,
 ):
-    n, m, inferred_field = _resolve_bits_single(values_or_fn, n_bits, m_bits)
+    n, m, inferred_field = _resolve_bits_single(values_or_fn, n_bits, m_bits, field)
     eval_field = inferred_field if inferred_field is not None else field
     tt = _to_truth_table(values_or_fn, n, m, field=eval_field)
     return _core.ea_auto(tt, n, m, time_limit_seconds, min_active_hyperplanes)
@@ -376,7 +386,7 @@ def ccz_equivalence(
     auto_group: Any = None,
 ):
     n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
-        f_values_or_fn, g_values_or_fn, n_bits, m_bits
+        f_values_or_fn, g_values_or_fn, n_bits, m_bits, field
     )
     f_eval_field = f_inferred_field if f_inferred_field is not None else field
     g_eval_field = g_inferred_field if g_inferred_field is not None else field
@@ -398,7 +408,7 @@ def ea_equivalence(
     auto_group: Any = None,
 ):
     n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
-        f_values_or_fn, g_values_or_fn, n_bits, m_bits
+        f_values_or_fn, g_values_or_fn, n_bits, m_bits, field
     )
     f_eval_field = f_inferred_field if f_inferred_field is not None else field
     g_eval_field = g_inferred_field if g_inferred_field is not None else field

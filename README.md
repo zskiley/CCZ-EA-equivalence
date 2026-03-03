@@ -25,11 +25,11 @@ import galois
 n = 9
 F = galois.GF(2**n)
 
-f = lambda a: a**3
-g = lambda a: a**5
+f = galois.Poly([1, 0, 0, 0], field=F)        # x^3
+g = galois.Poly([1, 0, 0, 0, 0, 0], field=F)  # x^5
 
-auto = ccz.ccz_auto(f, n_bits=n, field=F)
-eq = ccz.ccz_equivalence(f, g, n_bits=n, field=F)
+auto = ccz.ccz_auto(f, field=F)
+eq = ccz.ccz_equivalence(f, g, field=F)
 
 print(auto["order"], eq is not None)
 ```
@@ -42,10 +42,10 @@ import galois
 
 n = 9
 F = galois.GF(2**n)
-f = lambda a: a**3
-g = lambda a: a**6
+f = galois.Poly([1, 0, 0, 0], field=F)           # x^3
+g = galois.Poly([1, 0, 0, 0, 0, 0, 0], field=F)  # x^6
 
-eq = ccz.ccz_equivalence(f, g, n_bits=n, field=F)
+eq = ccz.ccz_equivalence(f, g, field=F)
 
 if eq is None:
     print("Not CCZ equivalent")
@@ -62,11 +62,11 @@ import galois
 n = 9
 F = galois.GF(2**n)
 
-f = lambda a: a**3
-g = lambda a: a**5
+f = galois.Poly([1, 0, 0, 0], field=F)        # x^3
+g = galois.Poly([1, 0, 0, 0, 0, 0], field=F)  # x^5
 
-auto = ccz.ccz_auto(f, n_bits=n, field=F)
-eq = ccz.ccz_equivalence(f, g, n_bits=n, field=F)
+auto = ccz.ccz_auto(f, field=F)
+eq = ccz.ccz_equivalence(f, g, field=F)
 
 print(auto["order"], eq is not None)
 ```
