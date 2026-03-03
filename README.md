@@ -20,13 +20,16 @@ pip install "git+https://github.com/zskiley/CCZ-EA-equivalence.git@main"
 
 ```python
 import ccz
+import galois
 
 n = 9
-f = lambda x: x**3
-g = lambda x: x**5
+F = galois.GF(2**n)
 
-auto = ccz.ccz_auto(f, n_bits=n)
-eq = ccz.ccz_equivalence(f, g, n_bits=n)
+f = lambda a: a**3
+g = lambda a: a**5
+
+auto = ccz.ccz_auto(f, n_bits=n, field=F)
+eq = ccz.ccz_equivalence(f, g, n_bits=n, field=F)
 
 print(auto["order"], eq is not None)
 ```
@@ -35,17 +38,37 @@ print(auto["order"], eq is not None)
 
 ```python
 import ccz
+import galois
 
 n = 9
-f = lambda x: x**3
-g = lambda x: x**6
+F = galois.GF(2**n)
+f = lambda a: a**3
+g = lambda a: a**6
 
-eq = ccz.ccz_equivalence(f, g, n_bits=n)
+eq = ccz.ccz_equivalence(f, g, n_bits=n, field=F)
 
 if eq is None:
     print("Not CCZ equivalent")
 else:
     print("CCZ equivalent; map size:", len(eq))
+```
+
+### galois usage (finite-field correct for power maps)
+
+```python
+import ccz
+import galois
+
+n = 9
+F = galois.GF(2**n)
+
+f = lambda a: a**3
+g = lambda a: a**5
+
+auto = ccz.ccz_auto(f, n_bits=n, field=F)
+eq = ccz.ccz_equivalence(f, g, n_bits=n, field=F)
+
+print(auto["order"], eq is not None)
 ```
 
 ### SageMath polynomial usage
