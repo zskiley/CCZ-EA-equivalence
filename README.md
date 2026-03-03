@@ -16,7 +16,7 @@ pip install "git+https://github.com/zskiley/CCZ-EA-equivalence.git@main"
 
 ## Quick Python usage
 
-### Automorphism + CCZ equivalence
+### 1) galois (finite-field polynomial)
 
 ```python
 import ccz
@@ -35,46 +35,24 @@ eq = ccz.ccz_equivalence(f, g, field=F)
 print(auto["order"], eq is not None)
 ```
 
-### Equivalence test only
+### 2) Truth table
 
 ```python
 import ccz
-import galois
-
 n = 9
-F = galois.GF(2**n)
-x = galois.Poly.Identity(F)
-f = x**3
-g = x**6
+mask = (1 << n) - 1
 
-eq = ccz.ccz_equivalence(f, g, field=F)
+# Example table (replace with your own finite-field table if needed)
+f_tt = [(x ^ (x << 1)) & mask for x in range(1 << n)]
+g_tt = [(x ^ (x << 2)) & mask for x in range(1 << n)]
 
-if eq is None:
-    print("Not CCZ equivalent")
-else:
-    print("CCZ equivalent; map size:", len(eq))
-```
-
-### galois usage (finite-field correct for power maps)
-
-```python
-import ccz
-import galois
-
-n = 9
-F = galois.GF(2**n)
-x = galois.Poly.Identity(F)
-
-f = x**3
-g = x**5
-
-auto = ccz.ccz_auto(f, field=F)
-eq = ccz.ccz_equivalence(f, g, field=F)
+auto = ccz.ccz_auto(f_tt, n_bits=n)
+eq = ccz.ccz_equivalence(f_tt, g_tt, n_bits=n)
 
 print(auto["order"], eq is not None)
 ```
 
-### SageMath polynomial usage
+### 3) SageMath polynomial
 
 ```python
 import ccz
