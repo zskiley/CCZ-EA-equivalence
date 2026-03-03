@@ -46,8 +46,8 @@ mask = (1 << n) - 1
 f_tt = [(x ^ (x << 1)) & mask for x in range(1 << n)]
 g_tt = [(x ^ (x << 2)) & mask for x in range(1 << n)]
 
-auto = ccz.ccz_auto(f_tt, n_bits=n)
-eq = ccz.ccz_equivalence(f_tt, g_tt, n_bits=n)
+auto = ccz.ccz_auto(f_tt)
+eq = ccz.ccz_equivalence(f_tt, g_tt)
 
 print(auto["order"], eq is not None)
 ```

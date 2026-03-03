@@ -229,6 +229,22 @@ def _to_truth_table(
     return [v & y_mask for v in values]
 
 
+def _infer_n_bits_from_truth_table_values(values_or_fn: Any) -> Optional[int]:
+    if callable(values_or_fn):
+        return None
+    try:
+        size = int(len(values_or_fn))
+    except Exception:
+        return None
+    if size <= 0:
+        return None
+    if (size & (size - 1)) != 0:
+        raise ValueError(
+            "truth table length must be a power of two when `n_bits` is omitted"
+        )
+    return size.bit_length() - 1
+
+
 def _resolve_bits_single(
     values_or_fn: Iterable[int] | IntFn | Any,
     n_bits: Optional[int],
@@ -259,10 +275,16 @@ def _resolve_bits_single(
                         "polynomial/field callable mode currently requires m_bits == n_bits"
                     )
                 return n, m, candidate_field
+        inferred_n = _infer_n_bits_from_truth_table_values(values_or_fn)
+        if inferred_n is not None:
+            n = inferred_n
+            m = n if m_bits is None else int(m_bits)
+            return n, m, inferred_field
 
     if n_bits is None:
         raise ValueError(
-            "`n_bits` is required unless input or `field` carries inferable field metadata"
+            "`n_bits` is required unless input/field metadata is inferable, "
+            "or the truth-table length is a power of two"
         )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
@@ -337,10 +359,19 @@ def _resolve_bits_pair(
             return n, m, (f_field if f_field is not None else field), (
                 g_field if g_field is not None else field
             )
+        f_n = _infer_n_bits_from_truth_table_values(f_values_or_fn)
+        g_n = _infer_n_bits_from_truth_table_values(g_values_or_fn)
+        if f_n is not None and g_n is not None:
+            if f_n != g_n:
+                raise ValueError("truth tables must have the same inferred n_bits")
+            n = f_n
+            m = n if m_bits is None else int(m_bits)
+            return n, m, f_field, g_field
 
     if n_bits is None:
         raise ValueError(
-            "`n_bits` is required unless input or `field` carries inferable field metadata"
+            "`n_bits` is required unless input/field metadata is inferable, "
+            "or both truth-table lengths are powers of two"
         )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
