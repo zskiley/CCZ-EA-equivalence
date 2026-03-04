@@ -34,8 +34,8 @@ x = galois.Poly.Identity(F)
 f = x**3
 g = x**5
 
-auto = ccz.ccz_auto(f, field=F)
-eq = ccz.ccz_equivalence(f, g, field=F)
+auto = ccz.ccz_auto(f)
+eq = ccz.ccz_equivalence(f, g)
 
 print(auto["order"], eq is not None)
 ```
@@ -82,21 +82,16 @@ print(auto["order"], eq is not None)
 ```python
 ccz.ccz_auto(
     values_or_fn,
-    n_bits=None,
-    m_bits=None,
     time_limit_seconds=None,
-    field=None,
     min_active_hyperplanes=None,
 )
 ```
 
 - `values_or_fn`: truth table, `galois.Poly`, or Sage polynomial.
-- `n_bits`: input dimension. Usually inferred from `field`/polynomial metadata,
-  or from truth-table length (`len = 2^n`).
-- `m_bits`: output dimension. Defaults to inferred `n_bits` for field-backed
-  polynomial input, and is inferred from truth-table values for truth tables.
+- Input/output dimensions are inferred automatically:
+  truth-table length gives `n`, and table values (or polynomial field degree)
+  determine `m`.
 - `time_limit_seconds`: optional auto-search timeout.
-- `field`: optional finite field context (mainly for galois input).
 - `min_active_hyperplanes`: optional refinement budget override.
 
 ### `ccz.ea_auto(...)`
@@ -104,10 +99,7 @@ ccz.ccz_auto(
 ```python
 ccz.ea_auto(
     values_or_fn,
-    n_bits=None,
-    m_bits=None,
     time_limit_seconds=None,
-    field=None,
     min_active_hyperplanes=None,
 )
 ```
@@ -120,10 +112,7 @@ Parameters are the same as `ccz.ccz_auto(...)`.
 ccz.ccz_equivalence(
     f_values_or_fn,
     g_values_or_fn,
-    n_bits=None,
-    m_bits=None,
     time_limit_seconds=None,
-    field=None,
     min_active_hyperplanes=None,
     auto_group=None,
 )
@@ -131,7 +120,8 @@ ccz.ccz_equivalence(
 
 - `f_values_or_fn`, `g_values_or_fn`: truth tables, `galois.Poly`, or Sage
   polynomials.
-- `n_bits`, `m_bits`, `time_limit_seconds`, `field`, `min_active_hyperplanes`:
+- dimensions are inferred automatically (as in `ccz.ccz_auto(...)`).
+- `time_limit_seconds`, `min_active_hyperplanes`:
   same meaning as in `ccz.ccz_auto(...)`.
 - `auto_group`: optional precomputed automorphism group seed.
   Accepts either `list[dict[int, int]]` generators or a full auto-result dict
@@ -143,10 +133,7 @@ ccz.ccz_equivalence(
 ccz.ea_equivalence(
     f_values_or_fn,
     g_values_or_fn,
-    n_bits=None,
-    m_bits=None,
     time_limit_seconds=None,
-    field=None,
     min_active_hyperplanes=None,
     auto_group=None,
 )

@@ -419,49 +419,36 @@ def _resolve_bits_pair(
 
 def ccz_auto(
     values_or_fn: Iterable[int] | Any,
-    n_bits: Optional[int] = None,
-    m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
-    field: Any = None,
     min_active_hyperplanes: Optional[int] = None,
 ):
-    n, m, inferred_field = _resolve_bits_single(values_or_fn, n_bits, m_bits, field)
-    eval_field = inferred_field if inferred_field is not None else field
-    tt = _to_truth_table(values_or_fn, n, m, field=eval_field)
+    n, m, inferred_field = _resolve_bits_single(values_or_fn, None, None, None)
+    tt = _to_truth_table(values_or_fn, n, m, field=inferred_field)
     return _core.ccz_auto(tt, n, m, time_limit_seconds, min_active_hyperplanes)
 
 
 def ea_auto(
     values_or_fn: Iterable[int] | Any,
-    n_bits: Optional[int] = None,
-    m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
-    field: Any = None,
     min_active_hyperplanes: Optional[int] = None,
 ):
-    n, m, inferred_field = _resolve_bits_single(values_or_fn, n_bits, m_bits, field)
-    eval_field = inferred_field if inferred_field is not None else field
-    tt = _to_truth_table(values_or_fn, n, m, field=eval_field)
+    n, m, inferred_field = _resolve_bits_single(values_or_fn, None, None, None)
+    tt = _to_truth_table(values_or_fn, n, m, field=inferred_field)
     return _core.ea_auto(tt, n, m, time_limit_seconds, min_active_hyperplanes)
 
 
 def ccz_equivalence(
     f_values_or_fn: Iterable[int] | Any,
     g_values_or_fn: Iterable[int] | Any,
-    n_bits: Optional[int] = None,
-    m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
-    field: Any = None,
     min_active_hyperplanes: Optional[int] = None,
     auto_group: Any = None,
 ):
     n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
-        f_values_or_fn, g_values_or_fn, n_bits, m_bits, field
+        f_values_or_fn, g_values_or_fn, None, None, None
     )
-    f_eval_field = f_inferred_field if f_inferred_field is not None else field
-    g_eval_field = g_inferred_field if g_inferred_field is not None else field
-    f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_eval_field)
-    g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_eval_field)
+    f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_inferred_field)
+    g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_inferred_field)
     return _core.ccz_equivalence(
         f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
     )
@@ -470,20 +457,15 @@ def ccz_equivalence(
 def ea_equivalence(
     f_values_or_fn: Iterable[int] | Any,
     g_values_or_fn: Iterable[int] | Any,
-    n_bits: Optional[int] = None,
-    m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
-    field: Any = None,
     min_active_hyperplanes: Optional[int] = None,
     auto_group: Any = None,
 ):
     n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
-        f_values_or_fn, g_values_or_fn, n_bits, m_bits, field
+        f_values_or_fn, g_values_or_fn, None, None, None
     )
-    f_eval_field = f_inferred_field if f_inferred_field is not None else field
-    g_eval_field = g_inferred_field if g_inferred_field is not None else field
-    f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_eval_field)
-    g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_eval_field)
+    f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_inferred_field)
+    g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_inferred_field)
     return _core.ea_equivalence(
         f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
     )

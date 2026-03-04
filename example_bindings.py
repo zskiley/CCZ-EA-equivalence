@@ -14,28 +14,15 @@ def _timed(label, fn):
     return res
 
 def main() -> None:
-    n_truth = 3
-    tt_f = [x for x in range(1 << n_truth)]
-    tt_g = [x for x in range(1 << n_truth)]
+    tt_f = [x for x in range(8)]
+    tt_g = [x for x in range(8)]
     _timed(
         "truth_table.ccz_equivalence",
-        lambda: ccz.ccz_equivalence(tt_f, tt_g, n_truth),
+        lambda: ccz.ccz_equivalence(tt_f, tt_g),
     )
     _timed(
         "truth_table.ea_equivalence",
-        lambda: ccz.ea_equivalence(tt_f, tt_g, n_truth),
-    )
-
-    n_callable = 3
-    f_int = lambda x: x
-    g_int = lambda x: x
-    _timed(
-        "callable.ccz_equivalence",
-        lambda: ccz.ccz_equivalence(f_int, g_int, n_callable),
-    )
-    _timed(
-        "callable.ea_equivalence",
-        lambda: ccz.ea_equivalence(f_int, g_int, n_callable),
+        lambda: ccz.ea_equivalence(tt_f, tt_g),
     )
 
     try:
@@ -119,19 +106,18 @@ def main() -> None:
     try:
         from sage.all import GF, PolynomialRing  # type: ignore
 
-        n_sage = 3
-        F_sage = GF(2**n_sage, name="a")
+        F_sage = GF(2**3, name="a")
         R = PolynomialRing(F_sage, "x")
         x = R.gen()
         p = x**3
         q = x**6
         _timed(
             "sage.ccz_equivalence",
-            lambda: ccz.ccz_equivalence(p, q, n_sage, field=F_sage),
+            lambda: ccz.ccz_equivalence(p, q),
         )
         _timed(
             "sage.ea_equivalence",
-            lambda: ccz.ea_equivalence(p, q, n_sage, field=F_sage),
+            lambda: ccz.ea_equivalence(p, q),
         )
     except Exception as exc:
         print("sage section failed:", exc)

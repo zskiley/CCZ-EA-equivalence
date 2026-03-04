@@ -143,28 +143,28 @@ def main() -> int:
     print("")
 
     if args.mode in ("all", "ccz_auto"):
-        autos = run_and_time(
+        auto = run_and_time(
             "ccz_auto",
             lambda: ccz.ccz_auto(
-                tt_f, args.n, time_limit_seconds=args.time_limit
+                tt_f, time_limit_seconds=args.time_limit
             ),
         )
-        print(f"ccz_auto count: {len(autos)}\n")
+        print(f"ccz_auto order: {auto['order']}\n")
 
     if args.mode in ("all", "ea_auto"):
-        autos = run_and_time(
+        auto = run_and_time(
             "ea_auto",
             lambda: ccz.ea_auto(
-                tt_f, args.n, time_limit_seconds=args.time_limit
+                tt_f, time_limit_seconds=args.time_limit
             ),
         )
-        print(f"ea_auto count: {len(autos)}\n")
+        print(f"ea_auto order: {auto['order']}\n")
 
     if args.mode in ("all", "ccz_equivalence"):
         eq = run_and_time(
             "ccz_equivalence",
             lambda: ccz.ccz_equivalence(
-                tt_f, tt_g, args.n, time_limit_seconds=args.time_limit
+                tt_f, tt_g, time_limit_seconds=args.time_limit
             ),
         )
         print(f"ccz_equivalence: {'YES' if eq is not None else 'NO'}")
@@ -176,7 +176,7 @@ def main() -> int:
         eq = run_and_time(
             "ea_equivalence",
             lambda: ccz.ea_equivalence(
-                tt_f, tt_g, args.n, time_limit_seconds=args.time_limit
+                tt_f, tt_g, time_limit_seconds=args.time_limit
             ),
         )
         print(f"ea_equivalence: {'YES' if eq is not None else 'NO'}")
