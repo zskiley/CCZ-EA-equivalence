@@ -18,7 +18,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import sys
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Iterable, Optional
 
 _HERE = Path(__file__).resolve().parent
 
@@ -94,9 +94,6 @@ except Exception:
         ) from exc
 
 
-IntFn = Callable[[int], int]
-
-
 def _coerce_int_maybe(value: Any) -> Optional[int]:
     if callable(value):
         try:
@@ -160,6 +157,22 @@ def _field_from_callable(func: Any) -> Any:
     return None
 
 
+def _is_supported_polynomial_callable(obj: Any) -> bool:
+    if not callable(obj):
+        return False
+    if _is_galois_poly(obj):
+        return True
+    return _field_from_callable(obj) is not None
+
+
+def _validate_supported_input(values_or_fn: Any, name: str) -> None:
+    if callable(values_or_fn) and not _is_supported_polynomial_callable(values_or_fn):
+        raise TypeError(
+            f"{name} callable input is not supported. "
+            "Pass a truth table, galois.Poly, or Sage polynomial."
+        )
+
+
 def _int_to_field_element(x: int, field: Any) -> Any:
     if hasattr(field, "fetch_int"):
         return field.fetch_int(x)
@@ -178,33 +191,21 @@ def _eval_callable_at_int(
     y_mask = (1 << m_bits) - 1
 
     ff = field if field is not None else _field_from_callable(func)
-
-    # If the caller explicitly provided a field, prefer field evaluation.
-    # Otherwise, many simple callables like `lambda a: a**3` will happily
-    # accept Python ints and compute integer arithmetic, which is not what we
-    # want for finite-field/polynomial inputs.
-    if ff is not None:
-        if m_bits != n_bits:
-            raise ValueError(
-                "polynomial/field callable mode currently requires m_bits == n_bits"
-            )
-        y = func(_int_to_field_element(x, ff))
-        return _field_element_to_int(y) & y_mask
-
-    try:
-        return int(func(x)) & y_mask
-    except Exception:
-        pass
-
-    raise TypeError(
-        "callable input could not be evaluated; pass `field=` for "
-        "finite-field callables (or provide a callable/polynomial with "
-        "built-in field metadata)"
-    )
+    if ff is None:
+        raise TypeError(
+            "callable input must be a field-backed polynomial "
+            "(galois.Poly or Sage polynomial)"
+        )
+    if m_bits != n_bits:
+        raise ValueError(
+            "polynomial/field callable mode currently requires m_bits == n_bits"
+        )
+    y = func(_int_to_field_element(x, ff))
+    return _field_element_to_int(y) & y_mask
 
 
 def _to_truth_table(
-    values_or_fn: Iterable[int] | IntFn | Any,
+    values_or_fn: Iterable[int] | Any,
     n_bits: int,
     m_bits: int,
     field: Any = None,
@@ -245,12 +246,34 @@ def _infer_n_bits_from_truth_table_values(values_or_fn: Any) -> Optional[int]:
     return size.bit_length() - 1
 
 
+def _infer_m_bits_from_truth_table_values(values_or_fn: Any) -> Optional[int]:
+    if callable(values_or_fn):
+        return None
+    max_value = 0
+    seen = False
+    try:
+        for raw in values_or_fn:
+            v = int(raw)
+            if v < 0:
+                raise ValueError("truth table values must be non-negative integers")
+            if v > max_value:
+                max_value = v
+            seen = True
+    except TypeError:
+        return None
+    if not seen:
+        return None
+    return max(1, max_value.bit_length())
+
+
 def _resolve_bits_single(
-    values_or_fn: Iterable[int] | IntFn | Any,
+    values_or_fn: Iterable[int] | Any,
     n_bits: Optional[int],
     m_bits: Optional[int],
     field: Any = None,
 ) -> tuple[int, int, Any]:
+    _validate_supported_input(values_or_fn, "values_or_fn")
+
     if _is_galois_poly(values_or_fn):
         if n_bits is not None:
             raise ValueError("`n_bits` must be omitted for galois polynomial input")
@@ -278,7 +301,11 @@ def _resolve_bits_single(
         inferred_n = _infer_n_bits_from_truth_table_values(values_or_fn)
         if inferred_n is not None:
             n = inferred_n
-            m = n if m_bits is None else int(m_bits)
+            if m_bits is None:
+                inferred_m = _infer_m_bits_from_truth_table_values(values_or_fn)
+                m = max(n, inferred_m if inferred_m is not None else 1)
+            else:
+                m = int(m_bits)
             return n, m, inferred_field
 
     if n_bits is None:
@@ -292,12 +319,15 @@ def _resolve_bits_single(
 
 
 def _resolve_bits_pair(
-    f_values_or_fn: Iterable[int] | IntFn | Any,
-    g_values_or_fn: Iterable[int] | IntFn | Any,
+    f_values_or_fn: Iterable[int] | Any,
+    g_values_or_fn: Iterable[int] | Any,
     n_bits: Optional[int],
     m_bits: Optional[int],
     field: Any = None,
 ) -> tuple[int, int, Any, Any]:
+    _validate_supported_input(f_values_or_fn, "f_values_or_fn")
+    _validate_supported_input(g_values_or_fn, "g_values_or_fn")
+
     f_is_galois_poly = _is_galois_poly(f_values_or_fn)
     g_is_galois_poly = _is_galois_poly(g_values_or_fn)
 
@@ -365,7 +395,16 @@ def _resolve_bits_pair(
             if f_n != g_n:
                 raise ValueError("truth tables must have the same inferred n_bits")
             n = f_n
-            m = n if m_bits is None else int(m_bits)
+            if m_bits is None:
+                f_m = _infer_m_bits_from_truth_table_values(f_values_or_fn)
+                g_m = _infer_m_bits_from_truth_table_values(g_values_or_fn)
+                m = max(
+                    n,
+                    f_m if f_m is not None else 1,
+                    g_m if g_m is not None else 1,
+                )
+            else:
+                m = int(m_bits)
             return n, m, f_field, g_field
 
     if n_bits is None:
@@ -379,7 +418,7 @@ def _resolve_bits_pair(
 
 
 def ccz_auto(
-    values_or_fn: Iterable[int] | IntFn | Any,
+    values_or_fn: Iterable[int] | Any,
     n_bits: Optional[int] = None,
     m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
@@ -393,7 +432,7 @@ def ccz_auto(
 
 
 def ea_auto(
-    values_or_fn: Iterable[int] | IntFn | Any,
+    values_or_fn: Iterable[int] | Any,
     n_bits: Optional[int] = None,
     m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
@@ -407,8 +446,8 @@ def ea_auto(
 
 
 def ccz_equivalence(
-    f_values_or_fn: Iterable[int] | IntFn | Any,
-    g_values_or_fn: Iterable[int] | IntFn | Any,
+    f_values_or_fn: Iterable[int] | Any,
+    g_values_or_fn: Iterable[int] | Any,
     n_bits: Optional[int] = None,
     m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,
@@ -429,8 +468,8 @@ def ccz_equivalence(
 
 
 def ea_equivalence(
-    f_values_or_fn: Iterable[int] | IntFn | Any,
-    g_values_or_fn: Iterable[int] | IntFn | Any,
+    f_values_or_fn: Iterable[int] | Any,
+    g_values_or_fn: Iterable[int] | Any,
     n_bits: Optional[int] = None,
     m_bits: Optional[int] = None,
     time_limit_seconds: Optional[float] = None,

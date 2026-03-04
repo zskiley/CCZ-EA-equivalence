@@ -16,6 +16,14 @@ pip install "git+https://github.com/zskiley/CCZ-EA-equivalence.git@main"
 
 ## Quick Python usage
 
+Supported Python inputs:
+- truth tables (`list[int]` / sequence of integers)
+- `galois.Poly`
+- Sage polynomials
+
+Not supported:
+- plain Python callables/lambdas like `lambda x: x**3`
+
 ### 1) galois (finite-field polynomial)
 
 ```python
@@ -39,12 +47,10 @@ print(auto["order"], eq is not None)
 
 ```python
 import ccz
-n = 9
-mask = (1 << n) - 1
 
-# Example table (replace with your own finite-field table if needed)
-f_tt = [(x ^ (x << 1)) & mask for x in range(1 << n)]
-g_tt = [(x ^ (x << 2)) & mask for x in range(1 << n)]
+# n = 3 truth tables (length = 2^3 = 8)
+f_tt = [0, 1, 2, 3, 4, 5, 6, 7]
+g_tt = [0, 1, 2, 3, 4, 5, 6, 7]
 
 auto = ccz.ccz_auto(f_tt)
 eq = ccz.ccz_equivalence(f_tt, g_tt)
@@ -78,3 +84,39 @@ print(auto["order"], eq is not None)
 - `ccz.ea_auto(values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None)`
 - `ccz.ccz_equivalence(f_values_or_fn, g_values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None, auto_group=None)`
 - `ccz.ea_equivalence(f_values_or_fn, g_values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None, auto_group=None)`
+
+## Return formats
+
+### `ccz_auto(...)` / `ea_auto(...)`
+
+Returns a dictionary:
+
+- `order: int`
+  : current group order found by the algorithm.
+- `found_entire_group: bool`
+  : `True` if search finished before timeout, `False` if timeout was hit.
+- `generators: list[dict[int, int]]`
+  : generator maps on graph-point integers.
+
+Each generator is a dictionary `p -> q`, where `p` and `q` are graph points
+encoded as integers in `F_2^{n+m}`:
+
+`p = x | (y << n)`
+
+with low `n` bits as input part `x`, and upper bits as output part `y`.
+
+### `ccz_equivalence(...)` / `ea_equivalence(...)`
+
+Returns either:
+
+- `None` (no equivalence found), or
+- `dict[int, int]` mapping graph points from `F` to graph points in `G`
+  using the same encoding `p = x | (y << n)`.
+
+### Optional `auto_group=` input format for equivalence
+
+You may pass:
+
+- a `list[dict[int, int]]` of generator maps, or
+- the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
+  `"generators"` field).
