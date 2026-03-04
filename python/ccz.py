@@ -240,9 +240,7 @@ def _infer_n_bits_from_truth_table_values(values_or_fn: Any) -> Optional[int]:
     if size <= 0:
         return None
     if (size & (size - 1)) != 0:
-        raise ValueError(
-            "truth table length must be a power of two when `n_bits` is omitted"
-        )
+        raise ValueError("truth table length must be a power of two")
     return size.bit_length() - 1
 
 
@@ -276,7 +274,7 @@ def _resolve_bits_single(
 
     if _is_galois_poly(values_or_fn):
         if n_bits is not None:
-            raise ValueError("`n_bits` must be omitted for galois polynomial input")
+            raise ValueError("internal error: unexpected explicit n_bits")
         ff = values_or_fn.field
         n = _infer_n_bits_from_field(ff)
         if n is None:
@@ -310,8 +308,8 @@ def _resolve_bits_single(
 
     if n_bits is None:
         raise ValueError(
-            "`n_bits` is required unless input/field metadata is inferable, "
-            "or the truth-table length is a power of two"
+            "could not infer dimensions from input; use a truth table "
+            "(length 2^n) or a field-backed polynomial (galois/Sage)"
         )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
@@ -333,7 +331,7 @@ def _resolve_bits_pair(
 
     if f_is_galois_poly or g_is_galois_poly:
         if n_bits is not None:
-            raise ValueError("`n_bits` must be omitted for galois polynomial input")
+            raise ValueError("internal error: unexpected explicit n_bits")
 
         inferred: list[int] = []
         f_field = f_values_or_fn.field if f_is_galois_poly else None
@@ -409,8 +407,9 @@ def _resolve_bits_pair(
 
     if n_bits is None:
         raise ValueError(
-            "`n_bits` is required unless input/field metadata is inferable, "
-            "or both truth-table lengths are powers of two"
+            "could not infer dimensions from inputs; pass two truth tables "
+            "with lengths 2^n, or two field-backed polynomials "
+            "(galois/Sage) over the same field size"
         )
     n = int(n_bits)
     m = n if m_bits is None else int(m_bits)
