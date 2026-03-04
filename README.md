@@ -21,9 +21,6 @@ Supported Python inputs:
 - `galois.Poly`
 - Sage polynomials
 
-Not supported:
-- plain Python callables/lambdas like `lambda x: x**3`
-
 ### 1) galois (finite-field polynomial)
 
 ```python
@@ -80,10 +77,82 @@ print(auto["order"], eq is not None)
 
 ## Available API
 
-- `ccz.ccz_auto(values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None)`
-- `ccz.ea_auto(values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None)`
-- `ccz.ccz_equivalence(f_values_or_fn, g_values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None, auto_group=None)`
-- `ccz.ea_equivalence(f_values_or_fn, g_values_or_fn, n_bits=None, m_bits=None, time_limit_seconds=None, field=None, min_active_hyperplanes=None, auto_group=None)`
+### `ccz.ccz_auto(...)`
+
+```python
+ccz.ccz_auto(
+    values_or_fn,
+    n_bits=None,
+    m_bits=None,
+    time_limit_seconds=None,
+    field=None,
+    min_active_hyperplanes=None,
+)
+```
+
+- `values_or_fn`: truth table, `galois.Poly`, or Sage polynomial.
+- `n_bits`: input dimension. Usually inferred from `field`/polynomial metadata,
+  or from truth-table length (`len = 2^n`).
+- `m_bits`: output dimension. Defaults to inferred `n_bits` for field-backed
+  polynomial input, and is inferred from truth-table values for truth tables.
+- `time_limit_seconds`: optional auto-search timeout.
+- `field`: optional finite field context (mainly for galois input).
+- `min_active_hyperplanes`: optional refinement budget override.
+
+### `ccz.ea_auto(...)`
+
+```python
+ccz.ea_auto(
+    values_or_fn,
+    n_bits=None,
+    m_bits=None,
+    time_limit_seconds=None,
+    field=None,
+    min_active_hyperplanes=None,
+)
+```
+
+Parameters are the same as `ccz.ccz_auto(...)`.
+
+### `ccz.ccz_equivalence(...)`
+
+```python
+ccz.ccz_equivalence(
+    f_values_or_fn,
+    g_values_or_fn,
+    n_bits=None,
+    m_bits=None,
+    time_limit_seconds=None,
+    field=None,
+    min_active_hyperplanes=None,
+    auto_group=None,
+)
+```
+
+- `f_values_or_fn`, `g_values_or_fn`: truth tables, `galois.Poly`, or Sage
+  polynomials.
+- `n_bits`, `m_bits`, `time_limit_seconds`, `field`, `min_active_hyperplanes`:
+  same meaning as in `ccz.ccz_auto(...)`.
+- `auto_group`: optional precomputed automorphism group seed.
+  Accepts either `list[dict[int, int]]` generators or a full auto-result dict
+  from `ccz_auto`/`ea_auto` (uses its `"generators"`).
+
+### `ccz.ea_equivalence(...)`
+
+```python
+ccz.ea_equivalence(
+    f_values_or_fn,
+    g_values_or_fn,
+    n_bits=None,
+    m_bits=None,
+    time_limit_seconds=None,
+    field=None,
+    min_active_hyperplanes=None,
+    auto_group=None,
+)
+```
+
+Parameters are the same as `ccz.ccz_equivalence(...)`.
 
 ## Return formats
 
