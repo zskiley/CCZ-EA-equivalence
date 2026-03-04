@@ -22,7 +22,7 @@ double DefaultAutoSeedTimeLimitSeconds(const GraphData& F) {
   if (n == 9) return 10.0;
   if (n == 10) return 10.0;
   if (n == 11) return 25.0;
-  if (n == 12) return 25;
+  if (n == 12) return 40;
   if (n==13) return 100;
   if (n==14) return 100;
   if (n==15) return 500;
