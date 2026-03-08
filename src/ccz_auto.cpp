@@ -3,6 +3,7 @@
 #include "dfs_auto.h"
 #include "field_basics.h"
 #include "groups/semilinear_seed.h"
+#include "groups/schreier_sims.h"
 #include "hyperplane.h"
 #include "ordered_partition.h"
 #include "quadratic.h"
@@ -66,6 +67,13 @@ std::vector<GraphPointMap> RunCCZAuto(const GraphData& F,
     BuildQuadraticTranslationGenerators(F, &translation_generators);
     AddInitialGroupGenerators(std::move(translation_generators));
     root_group_state = MakeRootGroupState();
+    // After fixing the quadratic anchor in A, orbit pruning must use the
+    // subgroup that fixes that anchor, not the full translation subgroup.
+    if (!groups::BuildChildPointStabilizerGenerators(
+            root_group_state.H_generators, quadratic_anchor_index,
+            F.points.size(), &root_group_state.H_generators)) {
+      root_group_state.H_generators.clear();
+    }
     root_group_state.fixed_right_indices.push_back(quadratic_anchor_index);
     root_group_state.H_epoch = std::numeric_limits<uint64_t>::max();
   }
