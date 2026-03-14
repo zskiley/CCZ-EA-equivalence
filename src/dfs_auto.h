@@ -25,11 +25,15 @@ void SetAutoSearchTimeLimitSeconds(double seconds);
 void SetUseEaValidation(bool enabled);
 bool FoundEntireAutoGroup();
 uint64_t GetTotalAutoGroup();
+uint64_t GetGraphActionAutoGroup();
 const std::vector<groups::Permutation>& GetAutoGroupGenerators();
 const std::vector<GraphPointMap>& GetFoundAutos();
 void InitializeGroupSearch(const GraphData& F);
 void AddInitialGroupGenerators(std::vector<groups::Permutation> generators);
 DfsGroupState MakeRootGroupState();
+void SetComputedAutoGroup(std::vector<GraphPointMap> autos,
+                          std::vector<groups::Permutation> generators,
+                          bool timed_out);
 
 void CCZ_DFS_auto(const GraphData& F, const std::vector<Hyperplane>& planes,
                   PartialAffineMap A,

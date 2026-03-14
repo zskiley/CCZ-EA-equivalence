@@ -124,8 +124,10 @@ ccz.ccz_equivalence(
 - `time_limit_seconds`, `min_active_hyperplanes`:
   same meaning as in `ccz.ccz_auto(...)`.
 - `auto_group`: optional precomputed automorphism group seed.
-  Accepts either `list[dict[int, int]]` generators or a full auto-result dict
-  from `ccz_auto`/`ea_auto` (uses its `"generators"`).
+  Accepts either:
+  - a `list[dict]` of ambient affine generators, or
+  - the full auto-result dict from `ccz_auto`/`ea_auto`
+    (uses its `"generators"` field).
 
 ### `ccz.ea_equivalence(...)`
 
@@ -148,18 +150,29 @@ Parameters are the same as `ccz.ccz_equivalence(...)`.
 Returns a dictionary:
 
 - `order: int`
-  : current group order found by the algorithm.
+  : full ambient affine automorphism-group order found by the algorithm.
 - `found_entire_group: bool`
   : `True` if search finished before timeout, `False` if timeout was hit.
-- `generators: list[dict[int, int]]`
-  : generator maps on graph-point integers.
+- `generators: list[dict]`
+  : ambient affine generators.
 
-Each generator is a dictionary `p -> q`, where `p` and `q` are graph points
-encoded as integers in `F_2^{n+m}`:
+Each generator has the form:
 
-`p = x | (y << n)`
+```python
+{
+    "translation": int,
+    "linear_cols": list[int],
+}
+```
 
-with low `n` bits as input part `x`, and upper bits as output part `y`.
+This represents the affine map
+
+`z |-> L(z) + t`
+
+on the ambient space `F_2^{n+m}`, where:
+
+- `translation` is `t`
+- `linear_cols[i]` is the image of basis vector `e_i` under `L`
 
 ### `ccz_equivalence(...)` / `ea_equivalence(...)`
 
@@ -173,6 +186,9 @@ Returns either:
 
 You may pass:
 
-- a `list[dict[int, int]]` of generator maps, or
+- a `list[dict]` of ambient affine generators, or
 - the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
   `"generators"` field).
+
+For backward compatibility, a list of graph-point generator maps is also
+accepted, but the default auto output now uses ambient affine generators.

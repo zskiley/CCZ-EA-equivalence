@@ -97,6 +97,7 @@ def main() -> int:
     sources = [
         "src/python.cpp",
         "src/algorithms.cpp",
+        "src/ambient_affine.cpp",
         "src/ccz_auto.cpp",
         "src/ea_auto.cpp",
         "src/ccz_equivalence.cpp",

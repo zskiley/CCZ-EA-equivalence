@@ -9,6 +9,15 @@
 
 struct GraphData;
 
+struct AffineMapData {
+  int dimension_bits = 0;
+  uint32_t translation = 0u;
+  std::vector<uint32_t> linear_cols;
+
+  uint32_t Apply(uint32_t x) const;
+  bool IsIdentity() const;
+};
+
 class PartialAffineMap {
  public:
   // Creates an empty partial map on F_2^{dimension_bits}.
@@ -38,6 +47,8 @@ class PartialAffineMap {
   // Checks whether the current partial map is still EA-valid on graph F.
   // Supports graphs of F_2^n -> F_2^m by inferring n from |points|=2^n.
   bool valid_ea(const GraphData& F) const;
+  // Returns one full affine extension consistent with the current partial map.
+  bool ExtractRepresentativeAffineMap(AffineMapData* out) const;
 
  private:
   bool TryExpressDx(uint32_t dx, uint64_t* coeff_mask) const;

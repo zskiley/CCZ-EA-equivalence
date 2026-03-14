@@ -11,7 +11,118 @@ int MostSignificantBit(uint32_t x) {
   }
   return -1;
 }
+
+uint32_t ApplyLinearColumnsLocal(const std::vector<uint32_t>& cols, uint32_t x) {
+  uint32_t y = 0u;
+  std::size_t bit = 0;
+  while (x != 0u) {
+    if ((x & 1u) != 0u) y ^= cols[bit];
+    x >>= 1u;
+    ++bit;
+  }
+  return y;
+}
+
+void ReduceWithBasisLocal(const std::vector<uint32_t>& basis, uint32_t* value) {
+  if (value == nullptr) return;
+  for (uint32_t pivot : basis) {
+    const int pivot_bit = MostSignificantBit(pivot);
+    if (pivot_bit >= 0 && (((*value) >> pivot_bit) & 1u) != 0u) {
+      *value ^= pivot;
+    }
+  }
+}
+
+bool AddToEchelonBasisLocal(uint32_t value, std::vector<uint32_t>* basis) {
+  if (basis == nullptr) return false;
+  ReduceWithBasisLocal(*basis, &value);
+  if (value == 0u) return false;
+  const int value_bit = MostSignificantBit(value);
+  std::size_t insert_at = 0;
+  while (insert_at < basis->size() &&
+         MostSignificantBit((*basis)[insert_at]) > value_bit) {
+    ++insert_at;
+  }
+  basis->insert(basis->begin() + static_cast<std::ptrdiff_t>(insert_at), value);
+  for (std::size_t i = 0; i < basis->size(); ++i) {
+    if (i == insert_at) continue;
+    if ((((*basis)[i] >> value_bit) & 1u) != 0u) (*basis)[i] ^= value;
+  }
+  return true;
+}
+
+bool IsInSpanLocal(const std::vector<uint32_t>& basis, uint32_t value) {
+  ReduceWithBasisLocal(basis, &value);
+  return value == 0u;
+}
+
+bool InvertLinearColumnsLocal(const std::vector<uint32_t>& cols,
+                              int dimension_bits,
+                              std::vector<uint32_t>* inv_cols) {
+  if (inv_cols == nullptr) return false;
+  if (cols.size() != static_cast<std::size_t>(dimension_bits)) return false;
+
+  std::vector<uint32_t> rows(static_cast<std::size_t>(dimension_bits), 0u);
+  std::vector<uint32_t> inv_rows(static_cast<std::size_t>(dimension_bits), 0u);
+  for (int row = 0; row < dimension_bits; ++row) {
+    uint32_t row_bits = 0u;
+    for (int col = 0; col < dimension_bits; ++col) {
+      if (((cols[static_cast<std::size_t>(col)] >> row) & 1u) != 0u) {
+        row_bits |= (1u << col);
+      }
+    }
+    rows[static_cast<std::size_t>(row)] = row_bits;
+    inv_rows[static_cast<std::size_t>(row)] = (1u << row);
+  }
+
+  for (int col = 0; col < dimension_bits; ++col) {
+    int pivot_row = col;
+    while (pivot_row < dimension_bits &&
+           ((rows[static_cast<std::size_t>(pivot_row)] >> col) & 1u) == 0u) {
+      ++pivot_row;
+    }
+    if (pivot_row == dimension_bits) return false;
+    if (pivot_row != col) {
+      std::swap(rows[static_cast<std::size_t>(pivot_row)],
+                rows[static_cast<std::size_t>(col)]);
+      std::swap(inv_rows[static_cast<std::size_t>(pivot_row)],
+                inv_rows[static_cast<std::size_t>(col)]);
+    }
+    for (int row = 0; row < dimension_bits; ++row) {
+      if (row == col) continue;
+      if (((rows[static_cast<std::size_t>(row)] >> col) & 1u) == 0u) continue;
+      rows[static_cast<std::size_t>(row)] ^= rows[static_cast<std::size_t>(col)];
+      inv_rows[static_cast<std::size_t>(row)] ^=
+          inv_rows[static_cast<std::size_t>(col)];
+    }
+  }
+
+  inv_cols->assign(static_cast<std::size_t>(dimension_bits), 0u);
+  for (int col = 0; col < dimension_bits; ++col) {
+    uint32_t image = 0u;
+    for (int row = 0; row < dimension_bits; ++row) {
+      if (((inv_rows[static_cast<std::size_t>(row)] >> col) & 1u) != 0u) {
+        image |= (1u << row);
+      }
+    }
+    (*inv_cols)[static_cast<std::size_t>(col)] = image;
+  }
+  return true;
+}
 }  // namespace
+
+uint32_t AffineMapData::Apply(uint32_t x) const {
+  return ApplyLinearColumnsLocal(linear_cols, x) ^ translation;
+}
+
+bool AffineMapData::IsIdentity() const {
+  if (translation != 0u) return false;
+  if (linear_cols.size() != static_cast<std::size_t>(dimension_bits)) return false;
+  for (int bit = 0; bit < dimension_bits; ++bit) {
+    if (linear_cols[static_cast<std::size_t>(bit)] != (1u << bit)) return false;
+  }
+  return true;
+}
 
 PartialAffineMap::PartialAffineMap(int dimension_bits)
     : dimension_bits_(dimension_bits),
@@ -233,5 +344,51 @@ bool PartialAffineMap::valid_ea(const GraphData& F) const {
     if ((v & mask_x) != 0u) return false;
   }
 
+  return true;
+}
+
+bool PartialAffineMap::ExtractRepresentativeAffineMap(AffineMapData* out) const {
+  if (out == nullptr || !has_anchor_) return false;
+
+  std::vector<uint32_t> domain_basis = basis_u_;
+  std::vector<uint32_t> image_basis = basis_v_;
+  std::vector<uint32_t> domain_span = basis_u_;
+  std::vector<uint32_t> image_span = basis_v_;
+
+  for (int bit = 0; bit < dimension_bits_; ++bit) {
+    const uint32_t e = (1u << bit);
+    if (!IsInSpanLocal(domain_span, e)) {
+      domain_basis.push_back(e);
+      (void)AddToEchelonBasisLocal(e, &domain_span);
+    }
+    if (!IsInSpanLocal(image_span, e)) {
+      image_basis.push_back(e);
+      (void)AddToEchelonBasisLocal(e, &image_span);
+    }
+  }
+
+  if (domain_basis.size() != static_cast<std::size_t>(dimension_bits_)) {
+    return false;
+  }
+  if (image_basis.size() != static_cast<std::size_t>(dimension_bits_)) {
+    return false;
+  }
+
+  std::vector<uint32_t> inv_domain_basis;
+  if (!InvertLinearColumnsLocal(domain_basis, dimension_bits_,
+                                &inv_domain_basis)) {
+    return false;
+  }
+
+  out->dimension_bits = dimension_bits_;
+  out->linear_cols.assign(static_cast<std::size_t>(dimension_bits_), 0u);
+  for (int bit = 0; bit < dimension_bits_; ++bit) {
+    const uint32_t coeffs =
+        ApplyLinearColumnsLocal(inv_domain_basis, (1u << bit));
+    out->linear_cols[static_cast<std::size_t>(bit)] =
+        ApplyLinearColumnsLocal(image_basis, coeffs);
+  }
+  out->translation = anchor_y_ ^
+                     ApplyLinearColumnsLocal(out->linear_cols, anchor_x_);
   return true;
 }

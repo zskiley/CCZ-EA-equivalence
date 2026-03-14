@@ -1,12 +1,6 @@
 # Python/Sage usage
 
-## Install from GitHub
-
-```bash
-pip install "git+https://github.com/<you>/<repo>.git"
-```
-
-## Manual build (developer mode)
+## Build
 
 From repository root:
 
@@ -14,15 +8,13 @@ From repository root:
 python python/build.py
 ```
 
-If you want Sage compatibility, build with Sage's Python:
+For Sage compatibility:
 
 ```bash
 sage -python python/build.py
 ```
 
-This produces `python/ccz_bindings...` (`.pyd` on Windows, `.so` on Linux/macOS).
-
-## Use from Python or Sage
+## Example
 
 ```python
 import sys
@@ -30,22 +22,32 @@ sys.path.append(r"/path/to/repo/python")
 
 import ccz
 
-n = 9
-f = lambda x: x**3
-g = lambda x: x**6
+f = [0, 1, 2, 3, 4, 5, 6, 7]
+g = [0, 1, 2, 3, 4, 5, 6, 7]
 
-autos = ccz.ccz_auto(f, n, time_limit_seconds=2.0)
-eq = ccz.ccz_equivalence(f, g, n, time_limit_seconds=2.0)
-print(len(autos), eq is not None)
+auto = ccz.ea_auto(f)
+eq = ccz.ea_equivalence(f, g, auto_group=auto)
+
+print(auto["order"], eq is not None)
 ```
 
-### API
+## Return value of `ccz_auto(...)` / `ea_auto(...)`
 
-- `ccz.ccz_auto(values_or_fn, n_bits, m_bits=None, time_limit_seconds=None)`
-- `ccz.ea_auto(values_or_fn, n_bits, m_bits=None, time_limit_seconds=None)`
-- `ccz.ccz_equivalence(f_values_or_fn, g_values_or_fn, n_bits, m_bits=None, time_limit_seconds=None)`
-- `ccz.ea_equivalence(f_values_or_fn, g_values_or_fn, n_bits, m_bits=None, time_limit_seconds=None)`
+Returns a dictionary with:
 
-`values_or_fn` can be:
-- a truth-table iterable of length `2^n_bits`, or
-- a callable `f(x)` returning integer outputs.
+- `order`
+- `found_entire_group`
+- `generators`
+
+`generators` is a list of ambient affine generators:
+
+```python
+{
+    "translation": int,
+    "linear_cols": list[int],
+}
+```
+
+These same generators can be passed back into
+`ccz.ccz_equivalence(..., auto_group=...)` or
+`ccz.ea_equivalence(..., auto_group=...)`.

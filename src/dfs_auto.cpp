@@ -1,5 +1,6 @@
 #include "dfs_auto.h"
 
+#include "ambient_affine.h"
 #include "partition_branch.h"
 #include "groups/dfs_group_helpers.h"
 #include "groups/graph_point_perm.h"
@@ -8,6 +9,7 @@
 #include "refine.h"
 
 #include <chrono>
+#include <limits>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -22,6 +24,14 @@ bool g_use_ea_validation = false;
 bool g_has_time_limit = false;
 std::chrono::steady_clock::time_point g_deadline;
 bool g_auto_search_timed_out = false;
+uint64_t g_kernel_order = 1u;
+
+uint64_t SaturatingMulU64(uint64_t a, uint64_t b) {
+  if (a == 0u || b == 0u) return 0u;
+  const uint64_t limit = std::numeric_limits<uint64_t>::max();
+  if (a > limit / b) return limit;
+  return a * b;
+}
 
 bool IsTimedOut() {
   if (!g_has_time_limit) return false;
@@ -77,6 +87,7 @@ void ResetAutoSearch() {
   g_global_group.reset();
   g_has_time_limit = false;
   g_auto_search_timed_out = false;
+  g_kernel_order = 1u;
 }
 
 void SetAutoSearchTimeLimitSeconds(double seconds) {
@@ -95,6 +106,13 @@ void SetUseEaValidation(bool enabled) { g_use_ea_validation = enabled; }
 bool FoundEntireAutoGroup() { return !g_auto_search_timed_out; }
 
 uint64_t GetTotalAutoGroup() {
+  if (g_global_group.has_value()) {
+    return SaturatingMulU64(g_global_group->Order(), g_kernel_order);
+  }
+  return 0;
+}
+
+uint64_t GetGraphActionAutoGroup() {
   if (g_global_group.has_value()) return g_global_group->Order();
   return 0;
 }
@@ -114,6 +132,7 @@ void InitializeGroupSearch(const GraphData& F) {
   g_global_group->SetGenerators({});
   g_global_group->Build();
   g_group_epoch = 0;
+  g_kernel_order = KernelAffineOrder(F);
 }
 
 void AddInitialGroupGenerators(std::vector<groups::Permutation> generators) {
@@ -126,6 +145,19 @@ DfsGroupState MakeRootGroupState() {
   DfsGroupState state;
   groups::FillRootGroupStateImpl(g_global_generators, g_group_epoch, &state);
   return state;
+}
+
+void SetComputedAutoGroup(std::vector<GraphPointMap> autos,
+                          std::vector<groups::Permutation> generators,
+                          bool timed_out) {
+  g_found_autos = std::move(autos);
+  g_global_generators = groups::DeduplicateGenerators(std::move(generators));
+  if (g_global_group.has_value()) {
+    g_global_group->SetGenerators(g_global_generators);
+    g_global_group->Build();
+  }
+  g_group_epoch = 0;
+  g_auto_search_timed_out = timed_out;
 }
 
 void CCZ_DFS_auto(const GraphData& F, const std::vector<Hyperplane>& planes,
