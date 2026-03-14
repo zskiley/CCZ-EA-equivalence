@@ -189,6 +189,3 @@ You may pass:
 - a `list[dict]` of ambient affine generators, or
 - the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
   `"generators"` field).
-
-For backward compatibility, a list of graph-point generator maps is also
-accepted, but the default auto output now uses ambient affine generators.

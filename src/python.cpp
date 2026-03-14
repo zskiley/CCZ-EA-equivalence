@@ -398,33 +398,6 @@ PyObject* BuildAutoGroupResult(const GraphData& graph) {
   return out;
 }
 
-bool ParseGraphPointMapDict(PyObject* obj, groups::GraphPointMap* out) {
-  if (out == nullptr) return false;
-  if (!PyDict_Check(obj)) {
-    PyErr_SetString(PyExc_TypeError,
-                    "generator entry must be a dict[int,int]");
-    return false;
-  }
-
-  out->clear();
-  out->reserve(static_cast<std::size_t>(PyDict_Size(obj)));
-
-  PyObject* key = nullptr;
-  PyObject* value = nullptr;
-  Py_ssize_t pos = 0;
-  while (PyDict_Next(obj, &pos, &key, &value)) {
-    uint32_t x = 0u;
-    uint32_t y = 0u;
-    if (!PyToUInt32(key, &x) || !PyToUInt32(value, &y)) {
-      PyErr_SetString(PyExc_TypeError,
-                      "generator dict keys/values must be uint32 integers");
-      return false;
-    }
-    out->push_back({x, y});
-  }
-  return true;
-}
-
 bool ParseAmbientGeneratorDict(PyObject* obj, const GraphData& graph,
                                AffineMapData* out) {
   if (out == nullptr) return false;
@@ -519,7 +492,6 @@ bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
       "auto_group must be a generator list or a dict with 'generators'");
   if (seq == nullptr) return false;
 
-  const groups::GraphPointIndex index(graph);
   const Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
   PyObject** items = PySequence_Fast_ITEMS(seq);
   std::vector<groups::Permutation> generators;
@@ -527,24 +499,13 @@ bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
 
   for (Py_ssize_t i = 0; i < n; ++i) {
     groups::Permutation perm;
-    groups::GraphPointMap map;
-    if (ParseGraphPointMapDict(items[i], &map)) {
-      if (!groups::GraphPointMapToPermutation(map, index, &perm)) {
-        Py_DECREF(seq);
-        PyErr_SetString(PyExc_ValueError,
-                        "auto_group contains invalid generator map");
-        return false;
-      }
-    } else {
-      PyErr_Clear();
-      AffineMapData ambient;
-      if (!ParseAmbientGeneratorDict(items[i], graph, &ambient) ||
-          !AmbientGeneratorToPermutation(graph, ambient, &perm)) {
-        Py_DECREF(seq);
-        PyErr_SetString(PyExc_ValueError,
-                        "auto_group contains invalid ambient generator");
-        return false;
-      }
+    AffineMapData ambient;
+    if (!ParseAmbientGeneratorDict(items[i], graph, &ambient) ||
+        !AmbientGeneratorToPermutation(graph, ambient, &perm)) {
+      Py_DECREF(seq);
+      PyErr_SetString(PyExc_ValueError,
+                      "auto_group contains invalid ambient generator");
+      return false;
     }
     if (!IsValidGeneratorAuto(graph, perm, require_ea)) {
       Py_DECREF(seq);
