@@ -60,6 +60,11 @@ void PrintAutoSeedStatus(const char* label_prefix,
   }
 }
 
+void PrintEquivalenceSearchStart(const char* label_prefix,
+                                 uint64_t total_auto_group) {
+  std::cout << label_prefix << total_auto_group << "\n";
+}
+
 }  // namespace
 
 std::vector<GraphPointMap> ccz_auto(const GraphData& F, double timelimit_seconds,
@@ -88,6 +93,8 @@ std::optional<EquivalencePointMap> ccz_equivalence(const GraphData& F,
   PrintAutoSeedStatus("Auto group size before equivalence search: ",
                       FoundEntireAutoGroup(), GetTotalAutoGroup(),
                       seed_generators, auto_timelimit);
+  PrintEquivalenceSearchStart("Starting equivalence search with auto group size: ",
+                              GetTotalAutoGroup());
   return RunCCZEquivalence(F, G, seed_generators, min_active_hyperplanes);
 }
 
@@ -107,6 +114,9 @@ std::optional<EquivalencePointMap> ea_equivalence(
   PrintAutoSeedStatus("EA auto group size before equivalence search: ",
                       FoundEntireAutoGroup(), GetTotalAutoGroup(),
                       seed_generators, auto_timelimit);
+  PrintEquivalenceSearchStart(
+      "Starting EA equivalence search with auto group size: ",
+      GetTotalAutoGroup());
   return RunEAEquivalence(F, G, seed_generators, min_active_hyperplanes);
 }
 

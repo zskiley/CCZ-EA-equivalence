@@ -575,6 +575,29 @@ def _invert_equivalence_point_map(point_map: Optional[dict[int, int]]):
     return {int(v): int(k) for k, v in point_map.items()}
 
 
+def _print_python_auto_seed_status(
+    auto_result: dict[str, Any],
+    time_limit_seconds: Optional[float],
+    start_label: str,
+) -> None:
+    found_entire_group = _auto_result_is_complete(auto_result)
+    order = _auto_result_order(auto_result)
+    if order is None:
+        return
+    if found_entire_group:
+        print("(Found entire auto group)", flush=True)
+    else:
+        print("(potentially incoplete auto group)", flush=True)
+    print(f"Auto group size before equivalence search: {order}", flush=True)
+    if not found_entire_group and not _auto_result_has_usable_seed(auto_result):
+        print(
+            "Consider increasing the time limit for the automorphism "
+            f"search, time_limit_seconds = {time_limit_seconds}",
+            flush=True,
+        )
+    print(f"{start_label}{order}", flush=True)
+
+
 def ccz_auto(
     values_or_fn: Iterable[int] | Any,
     time_limit_seconds: Optional[float] = None,
@@ -636,6 +659,14 @@ def ccz_equivalence(
             or (f_order is not None and g_order is not None and f_order > g_order)
         ):
             selected_auto_group = f_auto if _auto_result_has_usable_seed(f_auto) else None
+            if selected_auto_group is not None:
+                _print_python_auto_seed_status(
+                    f_auto,
+                    _effective_equivalence_auto_seed_time_limit_seconds(
+                        n, time_limit_seconds
+                    ),
+                    "Starting equivalence search with auto group size: ",
+                )
             swapped = _core.ccz_equivalence(
                 g_tt,
                 f_tt,
@@ -649,6 +680,13 @@ def ccz_equivalence(
 
         if _auto_result_has_usable_seed(g_auto):
             auto_group = g_auto
+            _print_python_auto_seed_status(
+                g_auto,
+                _effective_equivalence_auto_seed_time_limit_seconds(
+                    n, time_limit_seconds
+                ),
+                "Starting equivalence search with auto group size: ",
+            )
 
     return _core.ccz_equivalence(
         f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
@@ -696,6 +734,14 @@ def ea_equivalence(
             or (f_order is not None and g_order is not None and f_order > g_order)
         ):
             selected_auto_group = f_auto if _auto_result_has_usable_seed(f_auto) else None
+            if selected_auto_group is not None:
+                _print_python_auto_seed_status(
+                    f_auto,
+                    _effective_equivalence_auto_seed_time_limit_seconds(
+                        n, time_limit_seconds
+                    ),
+                    "Starting EA equivalence search with auto group size: ",
+                )
             swapped = _core.ea_equivalence(
                 g_tt,
                 f_tt,
@@ -709,6 +755,13 @@ def ea_equivalence(
 
         if _auto_result_has_usable_seed(g_auto):
             auto_group = g_auto
+            _print_python_auto_seed_status(
+                g_auto,
+                _effective_equivalence_auto_seed_time_limit_seconds(
+                    n, time_limit_seconds
+                ),
+                "Starting EA equivalence search with auto group size: ",
+            )
 
     return _core.ea_equivalence(
         f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
