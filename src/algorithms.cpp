@@ -42,6 +42,24 @@ std::vector<groups::Permutation> ExtractAutoGroupGenerators(
   return groups::DeduplicateGenerators(std::move(seed_generators));
 }
 
+void PrintAutoSeedStatus(const char* label_prefix,
+                         bool found_entire_group,
+                         uint64_t total_auto_group,
+                         const std::vector<groups::Permutation>& seed_generators,
+                         double auto_timelimit) {
+  if (found_entire_group) {
+    std::cout << "(Found entire auto group)\n";
+  } else {
+    std::cout << "(potentially incoplete auto group)\n";
+  }
+  std::cout << label_prefix << total_auto_group << "\n";
+  if (!found_entire_group && seed_generators.empty()) {
+    std::cout << "Consider increasing the time limit for the automorphism "
+                 "search, time_limit_seconds = "
+              << auto_timelimit << "\n";
+  }
+}
+
 }  // namespace
 
 std::vector<GraphPointMap> ccz_auto(const GraphData& F, double timelimit_seconds,
@@ -64,16 +82,12 @@ std::optional<EquivalencePointMap> ccz_equivalence(const GraphData& F,
   // Orbit pruning during equivalence search acts on the right-hand graph,
   // so seed with a subgroup of Aut(G), not Aut(F).
   (void)ccz_auto(G, auto_timelimit, min_active_hyperplanes);
-  if (FoundEntireAutoGroup()) {
-    std::cout << "(Found entire auto group)\n";
-  } else {
-    std::cout << "(potentially incoplete auto group)\n";
-  }
-  std::cout << "Auto group size before equivalence search: "
-            << GetTotalAutoGroup() << "\n";
 
   std::vector<groups::Permutation> seed_generators =
       ExtractAutoGroupGenerators(F.points.size());
+  PrintAutoSeedStatus("Auto group size before equivalence search: ",
+                      FoundEntireAutoGroup(), GetTotalAutoGroup(),
+                      seed_generators, auto_timelimit);
   return RunCCZEquivalence(F, G, seed_generators, min_active_hyperplanes);
 }
 
@@ -87,16 +101,12 @@ std::optional<EquivalencePointMap> ea_equivalence(
   // Orbit pruning during equivalence search acts on the right-hand graph,
   // so seed with a subgroup of Aut(G), not Aut(F).
   (void)ea_auto(G, auto_timelimit, min_active_hyperplanes);
-  if (FoundEntireAutoGroup()) {
-    std::cout << "(Found entire auto group)\n";
-  } else {
-    std::cout << "(potentially incoplete auto group)\n";
-  }
-  std::cout << "EA auto group size before equivalence search: "
-            << GetTotalAutoGroup() << "\n";
 
   std::vector<groups::Permutation> seed_generators =
       ExtractAutoGroupGenerators(F.points.size());
+  PrintAutoSeedStatus("EA auto group size before equivalence search: ",
+                      FoundEntireAutoGroup(), GetTotalAutoGroup(),
+                      seed_generators, auto_timelimit);
   return RunEAEquivalence(F, G, seed_generators, min_active_hyperplanes);
 }
 
