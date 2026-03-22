@@ -75,6 +75,12 @@ eq = ccz.ccz_equivalence(f, g)
 print(auto["order"], eq is not None)
 ```
 
+## Recomendations
+If the goal is to prove that two functions are equivalent then setting time_limit_seconds to a low value is recomended, 
+as the auto group is that that useful in that case.
+If one wants to determine inequivalence hovever the auto group is often essential. 
+
+
 ## Available API
 
 ### `ccz.ccz_auto(...)`
