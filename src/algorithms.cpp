@@ -17,16 +17,16 @@ namespace {
 double DefaultAutoSeedTimeLimitSeconds(const GraphData& F) {
   const int n = F.n_bits;
 
-  if (n <= 7) return 2.0;
+  if (n <= 7) return 10.0;
   if (n == 8) return 20.0;
-  if (n == 9) return 10.0;
-  if (n == 10) return 10.0;
-  if (n == 11) return 25.0;
-  if (n == 12) return 40;
-  if (n==13) return 100;
-  if (n==14) return 100;
-  if (n==15) return 500;
-  if (n==16) return 500;
+  if (n == 9) return 150.0;
+  if (n == 10) return 150.0;
+  if (n == 11) return 300.0;
+  if (n == 12) return 300.0;
+  if (n==13) return 1000;
+  if (n==14) return 1000;
+  if (n==15) return 3600;
+  if (n==16) return 3600;
   return 90.0;
 }
 
