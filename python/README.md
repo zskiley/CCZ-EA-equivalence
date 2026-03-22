@@ -51,3 +51,8 @@ Returns a dictionary with:
 These same generators can be passed back into
 `ccz.ccz_equivalence(..., auto_group=...)` or
 `ccz.ea_equivalence(..., auto_group=...)`.
+
+By default, equivalence also runs a parallel auto-seeding heuristic: it
+computes auto seeds for both inputs, prefers the larger discovered seed on the
+right-hand side, and if both full auto groups finish with different orders it
+returns `None` immediately.

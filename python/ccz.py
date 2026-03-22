@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -416,6 +417,135 @@ def _resolve_bits_pair(
     return n, m, f_field, g_field
 
 
+def _default_equivalence_auto_seed_time_limit_seconds(n_bits: int) -> float:
+    if n_bits <= 7:
+        return 2.0
+    if n_bits == 8:
+        return 20.0
+    if n_bits == 9:
+        return 10.0
+    if n_bits == 10:
+        return 10.0
+    if n_bits == 11:
+        return 25.0
+    if n_bits == 12:
+        return 40.0
+    if n_bits == 13:
+        return 100.0
+    if n_bits == 14:
+        return 100.0
+    if n_bits == 15:
+        return 500.0
+    if n_bits == 16:
+        return 500.0
+    return 90.0
+
+
+def _effective_equivalence_auto_seed_time_limit_seconds(
+    n_bits: int, time_limit_seconds: Optional[float]
+) -> float:
+    if time_limit_seconds is not None:
+        return float(time_limit_seconds)
+    return _default_equivalence_auto_seed_time_limit_seconds(n_bits)
+
+
+def _auto_worker_script_path() -> Path:
+    return _HERE / "auto_worker.py"
+
+
+def _compute_pair_autos_in_parallel(
+    mode: str,
+    f_tt: list[int],
+    g_tt: list[int],
+    n_bits: int,
+    m_bits: int,
+    time_limit_seconds: Optional[float],
+    min_active_hyperplanes: Optional[int],
+) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
+    worker_script = _auto_worker_script_path()
+    if not worker_script.is_file():
+        return None, None
+
+    auto_time_limit_seconds = _effective_equivalence_auto_seed_time_limit_seconds(
+        n_bits, time_limit_seconds
+    )
+    payloads = [
+        {
+            "mode": mode,
+            "truth_table": f_tt,
+            "n_bits": n_bits,
+            "m_bits": m_bits,
+            "time_limit_seconds": auto_time_limit_seconds,
+            "min_active_hyperplanes": min_active_hyperplanes,
+        },
+        {
+            "mode": mode,
+            "truth_table": g_tt,
+            "n_bits": n_bits,
+            "m_bits": m_bits,
+            "time_limit_seconds": auto_time_limit_seconds,
+            "min_active_hyperplanes": min_active_hyperplanes,
+        },
+    ]
+    processes = [
+        subprocess.Popen(
+            [sys.executable, str(worker_script)],
+            cwd=str(_HERE.parent),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for _ in payloads
+    ]
+
+    results: list[Optional[dict[str, Any]]] = []
+    for proc, payload in zip(processes, payloads):
+        stdout, _stderr = proc.communicate(json.dumps(payload))
+        if proc.returncode != 0:
+            results.append(None)
+            continue
+        try:
+            response = json.loads(stdout)
+        except Exception:
+            results.append(None)
+            continue
+        if not isinstance(response, dict) or not response.get("ok"):
+            results.append(None)
+            continue
+        result = response.get("result")
+        if not isinstance(result, dict):
+            results.append(None)
+            continue
+        if "generators" not in result or "order" not in result:
+            results.append(None)
+            continue
+        results.append(result)
+
+    return results[0], results[1]
+
+
+def _auto_result_order(auto_result: Optional[dict[str, Any]]) -> Optional[int]:
+    if auto_result is None:
+        return None
+    try:
+        return int(auto_result["order"])
+    except Exception:
+        return None
+
+
+def _auto_result_is_complete(auto_result: Optional[dict[str, Any]]) -> bool:
+    if auto_result is None:
+        return False
+    return bool(auto_result.get("found_entire_group"))
+
+
+def _invert_equivalence_point_map(point_map: Optional[dict[int, int]]):
+    if point_map is None:
+        return None
+    return {int(v): int(k) for k, v in point_map.items()}
+
+
 def ccz_auto(
     values_or_fn: Iterable[int] | Any,
     time_limit_seconds: Optional[float] = None,
@@ -442,12 +572,51 @@ def ccz_equivalence(
     time_limit_seconds: Optional[float] = None,
     min_active_hyperplanes: Optional[int] = None,
     auto_group: Any = None,
+    parallel_auto_seed: bool = True,
 ):
     n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
         f_values_or_fn, g_values_or_fn, None, None, None
     )
     f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_inferred_field)
     g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_inferred_field)
+
+    if parallel_auto_seed and auto_group is None:
+        f_auto, g_auto = _compute_pair_autos_in_parallel(
+            "ccz",
+            f_tt,
+            g_tt,
+            n,
+            m,
+            time_limit_seconds,
+            min_active_hyperplanes,
+        )
+        f_order = _auto_result_order(f_auto)
+        g_order = _auto_result_order(g_auto)
+
+        if (
+            _auto_result_is_complete(f_auto)
+            and _auto_result_is_complete(g_auto)
+            and f_order is not None
+            and g_order is not None
+            and f_order != g_order
+        ):
+            return None
+
+        if f_auto is not None and (g_auto is None or (f_order is not None and g_order is not None and f_order > g_order)):
+            swapped = _core.ccz_equivalence(
+                g_tt,
+                f_tt,
+                n,
+                m,
+                time_limit_seconds,
+                min_active_hyperplanes,
+                f_auto,
+            )
+            return _invert_equivalence_point_map(swapped)
+
+        if g_auto is not None:
+            auto_group = g_auto
+
     return _core.ccz_equivalence(
         f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
     )
@@ -459,12 +628,51 @@ def ea_equivalence(
     time_limit_seconds: Optional[float] = None,
     min_active_hyperplanes: Optional[int] = None,
     auto_group: Any = None,
+    parallel_auto_seed: bool = True,
 ):
     n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
         f_values_or_fn, g_values_or_fn, None, None, None
     )
     f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_inferred_field)
     g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_inferred_field)
+
+    if parallel_auto_seed and auto_group is None:
+        f_auto, g_auto = _compute_pair_autos_in_parallel(
+            "ea",
+            f_tt,
+            g_tt,
+            n,
+            m,
+            time_limit_seconds,
+            min_active_hyperplanes,
+        )
+        f_order = _auto_result_order(f_auto)
+        g_order = _auto_result_order(g_auto)
+
+        if (
+            _auto_result_is_complete(f_auto)
+            and _auto_result_is_complete(g_auto)
+            and f_order is not None
+            and g_order is not None
+            and f_order != g_order
+        ):
+            return None
+
+        if f_auto is not None and (g_auto is None or (f_order is not None and g_order is not None and f_order > g_order)):
+            swapped = _core.ea_equivalence(
+                g_tt,
+                f_tt,
+                n,
+                m,
+                time_limit_seconds,
+                min_active_hyperplanes,
+                f_auto,
+            )
+            return _invert_equivalence_point_map(swapped)
+
+        if g_auto is not None:
+            auto_group = g_auto
+
     return _core.ea_equivalence(
         f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
     )

@@ -43,7 +43,7 @@ setup(
     name="ccz",
     version="0.1.0",
     description="CCZ/EA automorphism and equivalence algorithms",
-    py_modules=["ccz"],
+    py_modules=["auto_worker", "ccz"],
     package_dir={"": "python"},
     ext_modules=[Extension("ccz_bindings", sources=[])],
     cmdclass={"build_ext": BuildCCZBindings},

@@ -115,6 +115,7 @@ ccz.ccz_equivalence(
     time_limit_seconds=None,
     min_active_hyperplanes=None,
     auto_group=None,
+    parallel_auto_seed=True,
 )
 ```
 
@@ -128,6 +129,11 @@ ccz.ccz_equivalence(
   - a `list[dict]` of ambient affine generators, or
   - the full auto-result dict from `ccz_auto`/`ea_auto`
     (uses its `"generators"` field).
+- `parallel_auto_seed`: enabled by default for equivalence.
+  When `auto_group` is not supplied, the wrapper computes automorphism seeds for
+  both inputs in parallel, prefers the larger discovered seed on the right-hand
+  side, and if both auto searches finish with different full group orders it
+  immediately concludes the functions are not equivalent.
 
 ### `ccz.ea_equivalence(...)`
 
@@ -138,6 +144,7 @@ ccz.ea_equivalence(
     time_limit_seconds=None,
     min_active_hyperplanes=None,
     auto_group=None,
+    parallel_auto_seed=True,
 )
 ```
 
@@ -189,3 +196,20 @@ You may pass:
 - a `list[dict]` of ambient affine generators, or
 - the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
   `"generators"` field).
+
+If `auto_group` is provided, it is used directly and the default parallel
+auto-seeding heuristic is skipped.
+
+### Default `parallel_auto_seed=True` heuristic for equivalence
+
+When enabled, the wrapper:
+
+- computes auto seeds for both inputs in separate Python subprocesses,
+- compares the discovered group orders,
+- swaps the equivalence direction when the left input yields the larger seed so
+  that larger seed is used on the right-hand side,
+- and returns `None` immediately if both complete auto searches finish and the
+  resulting full group orders differ.
+
+If the wrapper swaps the search direction, it inverts the returned point map
+before returning it to the caller.
