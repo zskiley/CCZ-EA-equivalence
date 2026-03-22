@@ -38,6 +38,7 @@ Returns a dictionary with:
 - `order`
 - `found_entire_group`
 - `generators`
+- `graph_generators`
 
 `generators` is a list of ambient affine generators:
 
@@ -50,7 +51,9 @@ Returns a dictionary with:
 
 These same generators can be passed back into
 `ccz.ccz_equivalence(..., auto_group=...)` or
-`ccz.ea_equivalence(..., auto_group=...)`.
+`ccz.ea_equivalence(..., auto_group=...)`. The full auto-result dict carries
+both ambient `generators` and internal `graph_generators`; equivalence will use
+whichever seed data is available.
 
 By default, equivalence also runs a parallel auto-seeding heuristic: it
 computes auto seeds for both inputs, prefers the larger discovered seed on the

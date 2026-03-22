@@ -162,6 +162,8 @@ Returns a dictionary:
   : `True` if search finished before timeout, `False` if timeout was hit.
 - `generators: list[dict]`
   : ambient affine generators.
+- `graph_generators: list[dict[int, int]]`
+  : graph-point generators that can be fed back into equivalence seeding.
 
 Each generator has the form:
 
@@ -181,6 +183,9 @@ on the ambient space `F_2^{n+m}`, where:
 - `translation` is `t`
 - `linear_cols[i]` is the image of basis vector `e_i` under `L`
 
+Each `graph_generators` entry is a dict mapping graph points to graph points
+using the same encoding `p = x | (y << n)`.
+
 ### `ccz_equivalence(...)` / `ea_equivalence(...)`
 
 Returns either:
@@ -195,7 +200,7 @@ You may pass:
 
 - a `list[dict]` of ambient affine generators, or
 - the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
-  `"generators"` field).
+  available `"graph_generators"` and/or `"generators"` fields).
 
 If `auto_group` is provided, it is used directly and the default parallel
 auto-seeding heuristic is skipped.

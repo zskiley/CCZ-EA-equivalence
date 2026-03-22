@@ -358,8 +358,10 @@ PyObject* AmbientGeneratorListToPyList(const std::vector<AffineMapData>& generat
 PyObject* BuildAutoGroupResult(const GraphData& graph) {
   PyObject* out = PyDict_New();
   if (out == nullptr) return nullptr;
+  const std::vector<groups::Permutation> graph_generators =
+      GetAutoGroupGenerators();
   const std::vector<AffineMapData> ambient_generators =
-      BuildAmbientAutoGenerators(graph, GetAutoGroupGenerators());
+      BuildAmbientAutoGenerators(graph, graph_generators);
 
   PyObject* order_obj = PyLong_FromUnsignedLongLong(
       static_cast<unsigned long long>(GetTotalAutoGroup()));
@@ -394,6 +396,19 @@ PyObject* BuildAutoGroupResult(const GraphData& graph) {
     return nullptr;
   }
   Py_DECREF(generators_obj);
+
+  PyObject* graph_generators_obj =
+      GeneratorListToPyList(graph, graph_generators);
+  if (graph_generators_obj == nullptr) {
+    Py_DECREF(out);
+    return nullptr;
+  }
+  if (PyDict_SetItemString(out, "graph_generators", graph_generators_obj) != 0) {
+    Py_DECREF(graph_generators_obj);
+    Py_DECREF(out);
+    return nullptr;
+  }
+  Py_DECREF(graph_generators_obj);
 
   return out;
 }
@@ -477,46 +492,127 @@ bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
   if (out == nullptr) return false;
   out->clear();
 
-  PyObject* generators_obj = auto_group_obj;
-  if (PyDict_Check(auto_group_obj)) {
-    generators_obj = PyDict_GetItemString(auto_group_obj, "generators");
-    if (generators_obj == nullptr) {
-      PyErr_SetString(PyExc_ValueError,
-                      "auto_group dict must contain key 'generators'");
-      return false;
-    }
-  }
-
-  PyObject* seq = PySequence_Fast(
-      generators_obj,
-      "auto_group must be a generator list or a dict with 'generators'");
-  if (seq == nullptr) return false;
-
-  const Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
-  PyObject** items = PySequence_Fast_ITEMS(seq);
   std::vector<groups::Permutation> generators;
-  generators.reserve(static_cast<std::size_t>(n));
+  auto parse_ambient_sequence = [&](PyObject* generators_obj,
+                                    const char* error_context) -> bool {
+    PyObject* seq = PySequence_Fast(generators_obj, error_context);
+    if (seq == nullptr) return false;
 
-  for (Py_ssize_t i = 0; i < n; ++i) {
-    groups::Permutation perm;
-    AffineMapData ambient;
-    if (!ParseAmbientGeneratorDict(items[i], graph, &ambient) ||
-        !AmbientGeneratorToPermutation(graph, ambient, &perm)) {
-      Py_DECREF(seq);
-      PyErr_SetString(PyExc_ValueError,
-                      "auto_group contains invalid ambient generator");
+    const Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
+    PyObject** items = PySequence_Fast_ITEMS(seq);
+    generators.reserve(generators.size() + static_cast<std::size_t>(n));
+
+    for (Py_ssize_t i = 0; i < n; ++i) {
+      groups::Permutation perm;
+      AffineMapData ambient;
+      if (!ParseAmbientGeneratorDict(items[i], graph, &ambient) ||
+          !AmbientGeneratorToPermutation(graph, ambient, &perm)) {
+        Py_DECREF(seq);
+        PyErr_SetString(PyExc_ValueError,
+                        "auto_group contains invalid ambient generator");
+        return false;
+      }
+      if (!IsValidGeneratorAuto(graph, perm, require_ea)) {
+        Py_DECREF(seq);
+        PyErr_SetString(
+            PyExc_ValueError,
+            "auto_group contains generator that is not a valid automorphism");
+        return false;
+      }
+      if (!perm.IsIdentity()) generators.push_back(std::move(perm));
+    }
+
+    Py_DECREF(seq);
+    return true;
+  };
+
+  auto parse_graph_sequence = [&](PyObject* graph_generators_obj) -> bool {
+    PyObject* seq = PySequence_Fast(
+        graph_generators_obj,
+        "auto_group['graph_generators'] must be a sequence of point-map dicts");
+    if (seq == nullptr) return false;
+
+    const groups::GraphPointIndex index(graph);
+    const Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
+    PyObject** items = PySequence_Fast_ITEMS(seq);
+    generators.reserve(generators.size() + static_cast<std::size_t>(n));
+
+    for (Py_ssize_t i = 0; i < n; ++i) {
+      PyObject* item = items[i];
+      if (!PyDict_Check(item)) {
+        Py_DECREF(seq);
+        PyErr_SetString(
+            PyExc_ValueError,
+            "auto_group['graph_generators'] contains a non-dict item");
+        return false;
+      }
+
+      groups::GraphPointMap map;
+      PyObject *key = nullptr, *value = nullptr;
+      Py_ssize_t pos = 0;
+      while (PyDict_Next(item, &pos, &key, &value)) {
+        uint32_t x = 0u;
+        uint32_t y = 0u;
+        if (!PyToUInt32(key, &x) || !PyToUInt32(value, &y)) {
+          Py_DECREF(seq);
+          PyErr_SetString(
+              PyExc_ValueError,
+              "auto_group['graph_generators'] contains a non-integer point");
+          return false;
+        }
+        map.emplace_back(x, y);
+      }
+
+      groups::Permutation perm;
+      if (!groups::GraphPointMapToPermutation(map, index, &perm)) {
+        Py_DECREF(seq);
+        PyErr_SetString(PyExc_ValueError,
+                        "auto_group contains invalid graph generator");
+        return false;
+      }
+      if (!IsValidGeneratorAuto(graph, perm, require_ea)) {
+        Py_DECREF(seq);
+        PyErr_SetString(
+            PyExc_ValueError,
+            "auto_group contains graph generator that is not a valid automorphism");
+        return false;
+      }
+      if (!perm.IsIdentity()) generators.push_back(std::move(perm));
+    }
+
+    Py_DECREF(seq);
+    return true;
+  };
+
+  if (PyDict_Check(auto_group_obj)) {
+    PyObject* generators_obj = PyDict_GetItemString(auto_group_obj, "generators");
+    PyObject* graph_generators_obj =
+        PyDict_GetItemString(auto_group_obj, "graph_generators");
+    if (generators_obj == nullptr && graph_generators_obj == nullptr) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "auto_group dict must contain key 'generators' or 'graph_generators'");
       return false;
     }
-    if (!IsValidGeneratorAuto(graph, perm, require_ea)) {
-      Py_DECREF(seq);
-      PyErr_SetString(PyExc_ValueError,
-                      "auto_group contains generator that is not a valid automorphism");
+    if (generators_obj != nullptr &&
+        !parse_ambient_sequence(
+            generators_obj,
+            "auto_group['generators'] must be a sequence of ambient generators")) {
       return false;
     }
-    if (!perm.IsIdentity()) generators.push_back(std::move(perm));
+    if (graph_generators_obj != nullptr &&
+        !parse_graph_sequence(graph_generators_obj)) {
+      return false;
+    }
+  } else {
+    if (!parse_ambient_sequence(
+            auto_group_obj,
+            "auto_group must be a generator list or a dict with "
+            "'generators'/'graph_generators'")) {
+      return false;
+    }
   }
 
-  Py_DECREF(seq);
   *out = groups::DeduplicateGenerators(std::move(generators));
   return true;
 }

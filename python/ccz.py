@@ -517,6 +517,7 @@ def _compute_pair_autos_in_parallel(
         if not isinstance(result, dict):
             results.append(None)
             continue
+        result = _normalize_auto_result(result)
         if "generators" not in result or "order" not in result:
             results.append(None)
             continue
@@ -538,6 +539,34 @@ def _auto_result_is_complete(auto_result: Optional[dict[str, Any]]) -> bool:
     if auto_result is None:
         return False
     return bool(auto_result.get("found_entire_group"))
+
+
+def _normalize_auto_result(auto_result: dict[str, Any]) -> dict[str, Any]:
+    graph_generators = auto_result.get("graph_generators")
+    if isinstance(graph_generators, list):
+        normalized_graph_generators: list[dict[int, int]] = []
+        for generator in graph_generators:
+            if not isinstance(generator, dict):
+                continue
+            normalized_generator: dict[int, int] = {}
+            for k, v in generator.items():
+                try:
+                    normalized_generator[int(k)] = int(v)
+                except Exception:
+                    continue
+            normalized_graph_generators.append(normalized_generator)
+        auto_result["graph_generators"] = normalized_graph_generators
+    return auto_result
+
+
+def _auto_result_has_usable_seed(auto_result: Optional[dict[str, Any]]) -> bool:
+    if auto_result is None:
+        return False
+    generators = auto_result.get("generators")
+    if isinstance(generators, list) and len(generators) > 0:
+        return True
+    graph_generators = auto_result.get("graph_generators")
+    return isinstance(graph_generators, list) and len(graph_generators) > 0
 
 
 def _invert_equivalence_point_map(point_map: Optional[dict[int, int]]):
@@ -602,7 +631,11 @@ def ccz_equivalence(
         ):
             return None
 
-        if f_auto is not None and (g_auto is None or (f_order is not None and g_order is not None and f_order > g_order)):
+        if f_auto is not None and (
+            g_auto is None
+            or (f_order is not None and g_order is not None and f_order > g_order)
+        ):
+            selected_auto_group = f_auto if _auto_result_has_usable_seed(f_auto) else None
             swapped = _core.ccz_equivalence(
                 g_tt,
                 f_tt,
@@ -610,11 +643,11 @@ def ccz_equivalence(
                 m,
                 time_limit_seconds,
                 min_active_hyperplanes,
-                f_auto,
+                selected_auto_group,
             )
             return _invert_equivalence_point_map(swapped)
 
-        if g_auto is not None:
+        if _auto_result_has_usable_seed(g_auto):
             auto_group = g_auto
 
     return _core.ccz_equivalence(
@@ -658,7 +691,11 @@ def ea_equivalence(
         ):
             return None
 
-        if f_auto is not None and (g_auto is None or (f_order is not None and g_order is not None and f_order > g_order)):
+        if f_auto is not None and (
+            g_auto is None
+            or (f_order is not None and g_order is not None and f_order > g_order)
+        ):
+            selected_auto_group = f_auto if _auto_result_has_usable_seed(f_auto) else None
             swapped = _core.ea_equivalence(
                 g_tt,
                 f_tt,
@@ -666,11 +703,11 @@ def ea_equivalence(
                 m,
                 time_limit_seconds,
                 min_active_hyperplanes,
-                f_auto,
+                selected_auto_group,
             )
             return _invert_equivalence_point_map(swapped)
 
-        if g_auto is not None:
+        if _auto_result_has_usable_seed(g_auto):
             auto_group = g_auto
 
     return _core.ea_equivalence(
