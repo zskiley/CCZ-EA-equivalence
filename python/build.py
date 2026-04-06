@@ -118,7 +118,6 @@ def main() -> int:
         "src/groups/orbit_traversal.cpp",
         "src/groups/schreier_sims.cpp",
         "src/groups/graph_point_perm.cpp",
-        "src/groups/semilinear_seed.cpp",
         "src/groups/orbit_candidates.cpp",
         "src/groups/dfs_group_helpers.cpp",
     ]

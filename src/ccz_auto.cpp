@@ -1,8 +1,6 @@
 #include "ccz_auto.h"
 
 #include "dfs_auto.h"
-#include "field_basics.h"
-#include "groups/semilinear_seed.h"
 #include "groups/schreier_sims.h"
 #include "hyperplane.h"
 #include "ordered_partition.h"
@@ -42,14 +40,6 @@ std::vector<GraphPointMap> RunCCZAuto(const GraphData& F,
   PartialAffineMap A0(F.d_bits);
 
   InitializeGroupSearch(F);
-  if (F.n_bits > 0 && F.n_bits < 31 && F.m_bits == F.n_bits) {
-    const uint32_t mask = (static_cast<uint32_t>(1u) << F.n_bits) - 1u;
-    const GF2n field{F.n_bits, DefaultModPoly(F.n_bits), mask};
-    auto semilinear = groups::FindSemilinearSeedGenerators(
-        F, field, /*max_scaling_generators=*/1);
-    if (!semilinear.empty()) AddInitialGroupGenerators(std::move(semilinear));
-  }
-
   DfsGroupState root_group_state = MakeRootGroupState();
   uint32_t quadratic_anchor_point = 0u;
   if (TryQuadraticAnchorPoint(F, &quadratic_anchor_point)) {
