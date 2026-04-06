@@ -33,8 +33,10 @@ std::vector<GraphPointMap> RunEAAuto(const GraphData& F,
 
   std::vector<Hyperplane> planes;
   OrderedPartition hyperplanes_left;
-  BuildEAHyperplaneSubsetByWalsh(F, min_active_hyperplanes, &planes,
-                                 &hyperplanes_left);
+  if (!BuildHyperplaneSubsetByWalsh(F, min_active_hyperplanes, &planes,
+                                    &hyperplanes_left)) {
+    return {};
+  }
   OrderedPartition hyperplanes_right = hyperplanes_left;
 
   PartialAffineMap A0(F.d_bits);

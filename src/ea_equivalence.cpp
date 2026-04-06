@@ -39,13 +39,17 @@ std::optional<EquivalencePointMap> RunEAEquivalence(
 
   std::vector<Hyperplane> planes_left;
   OrderedPartition hyperplanes_left;
-  BuildEAHyperplaneSubsetByWalsh(F_left, min_active_hyperplanes, &planes_left,
-                                 &hyperplanes_left);
+  if (!BuildHyperplaneSubsetByWalsh(F_left, min_active_hyperplanes, &planes_left,
+                                    &hyperplanes_left)) {
+    return std::nullopt;
+  }
 
   std::vector<Hyperplane> planes_right;
   OrderedPartition hyperplanes_right;
-  BuildEAHyperplaneSubsetByWalsh(F_right, min_active_hyperplanes, &planes_right,
-                                 &hyperplanes_right);
+  if (!BuildHyperplaneSubsetByWalsh(F_right, min_active_hyperplanes, &planes_right,
+                                    &hyperplanes_right)) {
+    return std::nullopt;
+  }
 
   if (planes_left.empty() || planes_right.empty()) return std::nullopt;
   if (!hyperplanes_left.HasSameShape(hyperplanes_right)) return std::nullopt;

@@ -19,8 +19,4 @@ bool BuildHyperplaneSubsetByWalsh(const GraphData& F, std::size_t threshold,
                                   std::vector<Hyperplane>* planes,
                                   OrderedPartition* hyperplanes_partition);
 
-void BuildEAHyperplaneSubsetByWalsh(const GraphData& F, std::size_t threshold,
-                                    std::vector<Hyperplane>* planes,
-                                    OrderedPartition* hyperplanes_partition);
-
 #endif
