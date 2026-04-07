@@ -15,37 +15,9 @@ namespace {
 std::vector<EquivalencePointMap> g_found_equivalences;
 bool g_use_ea_validation = false;
 
-bool IsValidCCZBetween(const PartialAffineMap& A, const GraphData& F_left,
-                       const GraphData& F_right) {
-  if (F_left.d_bits != F_right.d_bits) return false;
-  if (F_left.d_bits <= 0 || F_left.d_bits >= 31) return false;
-  if (F_right.is_graph.size() != (static_cast<std::size_t>(1u) << F_right.d_bits)) {
-    return false;
-  }
-  if (F_left.is_graph.size() != (static_cast<std::size_t>(1u) << F_left.d_bits)) {
-    return false;
-  }
-
-  for (const auto& kv : A.Mappings()) {
-    const uint32_t x = kv.first;
-    const uint32_t y = kv.second;
-    if (x >= F_left.is_graph.size() || !F_left.is_graph[x]) return false;
-    if (y >= F_right.is_graph.size() || !F_right.is_graph[y]) return false;
-  }
-
-  for (uint32_t x : F_left.points) {
-    const auto y = A.GetImage(x);
-    if (!y.has_value()) continue;
-    if (*y >= F_right.is_graph.size()) return false;
-    if (!F_right.is_graph[*y]) return false;
-  }
-
-  return true;
-}
-
 bool IsValidEABetween(const PartialAffineMap& A, const GraphData& F_left,
                       const GraphData& F_right) {
-  if (!IsValidCCZBetween(A, F_left, F_right)) return false;
+  if (F_left.d_bits != F_right.d_bits) return false;
   if (F_left.n_bits != F_right.n_bits) return false;
   if (F_left.m_bits != F_right.m_bits) return false;
 
@@ -74,8 +46,7 @@ bool IsValidEABetween(const PartialAffineMap& A, const GraphData& F_left,
 
 bool IsValidMapByMode(const PartialAffineMap& A, const GraphData& F_left,
                       const GraphData& F_right) {
-  return g_use_ea_validation ? IsValidEABetween(A, F_left, F_right)
-                             : IsValidCCZBetween(A, F_left, F_right);
+  return !g_use_ea_validation || IsValidEABetween(A, F_left, F_right);
 }
 
 bool TryFinalizeCurrentMap(const GraphData& F_left, const GraphData& F_right,
