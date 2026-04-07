@@ -207,7 +207,6 @@ void CCZ_DFS_equivalence(const GraphData& F_left, const GraphData& F_right,
                                       &A)) {
     return;
   }
-  if (!IsValidMapByMode(A, F_left, F_right)) return;
 
   const auto branch_cell =
       NextUndeterminedBranchCellPair(F_left, points_left, points_right, A);
@@ -245,7 +244,6 @@ void CCZ_DFS_equivalence(const GraphData& F_left, const GraphData& F_right,
     const uint32_t y = F_right.points[y_index];
     PartialAffineMap next_A = A;
     if (!next_A.Update(x, y)) continue;
-    if (!IsValidMapByMode(next_A, F_left, F_right)) continue;
 
     OrderedPartition next_points_left = points_left;
     OrderedPartition next_points_right = points_right;
