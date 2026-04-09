@@ -49,6 +49,14 @@ bool IsValidMapByMode(const PartialAffineMap& A, const GraphData& F_left,
   return !g_use_ea_validation || IsValidEABetween(A, F_left, F_right);
 }
 
+bool IsFullyDeterminedOnGraph(const GraphData& F,
+                              const PartialAffineMap& A) {
+  for (uint32_t x : F.points) {
+    if (!A.GetImage(x).has_value()) return false;
+  }
+  return true;
+}
+
 bool TryFinalizeCurrentMap(const GraphData& F_left, const GraphData& F_right,
                            const PartialAffineMap& A) {
   if (!IsValidMapByMode(A, F_left, F_right)) return false;
@@ -176,6 +184,10 @@ void CCZ_DFS_equivalence(const GraphData& F_left, const GraphData& F_right,
 
   if (!ApplyMatchedSingletonCellsPair(F_left, F_right, points_left, points_right,
                                       &A)) {
+    return;
+  }
+  if (IsFullyDeterminedOnGraph(F_left, A)) {
+    (void)TryFinalizeCurrentMap(F_left, F_right, A);
     return;
   }
 

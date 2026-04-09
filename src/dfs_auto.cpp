@@ -63,6 +63,14 @@ bool IsValidMapByMode(const PartialAffineMap& A, const GraphData& F) {
   return g_use_ea_validation ? A.valid_ea(F) : A.valid_ccz(F);
 }
 
+bool IsFullyDeterminedOnGraph(const GraphData& F,
+                              const PartialAffineMap& A) {
+  for (uint32_t x : F.points) {
+    if (!A.GetImage(x).has_value()) return false;
+  }
+  return true;
+}
+
 bool TryFinalizeCurrentMap(const GraphData& F, const PartialAffineMap& A) {
   if (!IsValidMapByMode(A, F)) return false;
   const int n_pts = static_cast<int>(F.points.size());
@@ -187,6 +195,10 @@ void CCZ_DFS_auto(const GraphData& F, const std::vector<Hyperplane>& planes,
       return;
     }
     if (!IsValidMapByMode(A, F)) return;
+    if (IsFullyDeterminedOnGraph(F, A)) {
+      if (!TryFinalizeCurrentMap(F, A)) return;
+      return;
+    }
   }
 
   const auto branch_cell =
