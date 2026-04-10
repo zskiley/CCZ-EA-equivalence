@@ -45,8 +45,10 @@ class PartialAffineMap {
   // Checks whether the current partial map is still CCZ-valid on graph F.
   bool valid_ccz(const GraphData& F) const;
   // Checks whether the current partial map is still EA-valid on graph F.
-  // Supports graphs of F_2^n -> F_2^m by inferring n from |points|=2^n.
   bool valid_ea(const GraphData& F) const;
+  // Checks the EA block-form condition on the current learned linear span:
+  // any known pure output-space direction must map back into the output space.
+  bool PreservesOutputSubspace(int n_bits, int m_bits) const;
   // Returns one full affine extension consistent with the current partial map.
   bool ExtractRepresentativeAffineMap(AffineMapData* out) const;
 

@@ -15,38 +15,13 @@ namespace {
 std::vector<EquivalencePointMap> g_found_equivalences;
 bool g_use_ea_validation = false;
 
-bool IsValidEABetween(const PartialAffineMap& A, const GraphData& F_left,
+bool IsValidMapByMode(const PartialAffineMap& A, const GraphData& F_left,
                       const GraphData& F_right) {
   if (F_left.d_bits != F_right.d_bits) return false;
   if (F_left.n_bits != F_right.n_bits) return false;
   if (F_left.m_bits != F_right.m_bits) return false;
-
-  const int n = F_left.n_bits;
-  if (n <= 0 || n >= 31) return false;
-  const uint32_t mask_x = (1u << n) - 1u;
-
-  std::vector<int32_t> left_to_right(static_cast<std::size_t>(1u << n), -1);
-  std::vector<int32_t> right_owner(static_cast<std::size_t>(1u << n), -1);
-
-  for (const auto& kv : A.Mappings()) {
-    const uint32_t x_left = kv.first & mask_x;
-    const uint32_t y_left = kv.second & mask_x;
-
-    const int32_t previous = left_to_right[x_left];
-    if (previous >= 0 && static_cast<uint32_t>(previous) != y_left) return false;
-    left_to_right[x_left] = static_cast<int32_t>(y_left);
-
-    const int32_t owner = right_owner[y_left];
-    if (owner >= 0 && static_cast<uint32_t>(owner) != x_left) return false;
-    right_owner[y_left] = static_cast<int32_t>(x_left);
-  }
-
-  return true;
-}
-
-bool IsValidMapByMode(const PartialAffineMap& A, const GraphData& F_left,
-                      const GraphData& F_right) {
-  return !g_use_ea_validation || IsValidEABetween(A, F_left, F_right);
+  return !g_use_ea_validation ||
+         A.PreservesOutputSubspace(F_left.n_bits, F_left.m_bits);
 }
 
 bool IsFullyDeterminedOnGraph(const GraphData& F,

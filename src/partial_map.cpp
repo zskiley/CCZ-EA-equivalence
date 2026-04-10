@@ -316,26 +316,14 @@ bool PartialAffineMap::valid_ea(const GraphData& F) const {
   const int m = F.m_bits;
   if (n <= 0 || m <= 0 || n >= 31 || m >= 31) return false;
   if (n + m != F.d_bits) return false;
+  return PreservesOutputSubspace(n, m);
+}
+
+bool PartialAffineMap::PreservesOutputSubspace(int n, int m) const {
+  if (n <= 0 || m <= 0 || n >= 31 || m >= 31) return false;
+  if (n + m != dimension_bits_) return false;
+
   const uint32_t mask_x = (1u << n) - 1u;
-
-  if (!mapping_.empty()) {
-    std::vector<int32_t> x_left_image(static_cast<std::size_t>(1u << n), -1);
-    std::vector<int32_t> x_image_owner(static_cast<std::size_t>(1u << n), -1);
-
-    for (const auto& kv : mapping_) {
-      const uint32_t x = kv.first & mask_x;
-      const uint32_t xp = kv.second & mask_x;
-
-      const int32_t left = x_left_image[static_cast<std::size_t>(x)];
-      if (left >= 0 && static_cast<uint32_t>(left) != xp) return false;
-      x_left_image[static_cast<std::size_t>(x)] = static_cast<int32_t>(xp);
-
-      const int32_t owner = x_image_owner[static_cast<std::size_t>(xp)];
-      if (owner >= 0 && static_cast<uint32_t>(owner) != x) return false;
-      x_image_owner[static_cast<std::size_t>(xp)] = static_cast<int32_t>(x);
-    }
-  }
-
   for (int i = 0; i < m; ++i) {
     const uint32_t u = (1u << (n + i));
     uint64_t coeff_mask = 0ull;
