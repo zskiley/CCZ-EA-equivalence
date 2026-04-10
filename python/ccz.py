@@ -19,6 +19,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import sys
+import time
 from typing import Any, Iterable, Optional
 
 _HERE = Path(__file__).resolve().parent
@@ -419,10 +420,9 @@ def _resolve_bits_pair(
 
 def _equivalence_auto_seed_time_limit_seconds_arg(
     time_limit_seconds: Optional[float],
-) -> float:
+) -> Optional[float]:
     if time_limit_seconds is None:
-        # Passing 0.0 to the core means "use the core default table".
-        return 0.0
+        return None
     return float(time_limit_seconds)
 
 
@@ -462,6 +462,7 @@ def _compute_pair_autos_in_parallel(
     auto_time_limit_seconds = _equivalence_auto_seed_time_limit_seconds_arg(
         time_limit_seconds
     )
+    stop_on_first_success = auto_time_limit_seconds is None
     worker_affinities = _parallel_auto_worker_affinities()
     payloads = [
         {
@@ -501,31 +502,59 @@ def _compute_pair_autos_in_parallel(
         proc.stdin.write(json.dumps(payload))
         proc.stdin.close()
 
-    results: list[Optional[dict[str, Any]]] = []
-    for proc in processes:
-        stdout = proc.stdout.read() if proc.stdout is not None else ""
-        _stderr = proc.stderr.read() if proc.stderr is not None else ""
-        proc.wait()
+    def _read_worker_result(proc: subprocess.Popen[str]) -> Optional[dict[str, Any]]:
+        stdout, _stderr = proc.communicate()
         if proc.returncode != 0:
-            results.append(None)
-            continue
+            return None
         try:
             response = json.loads(stdout)
         except Exception:
-            results.append(None)
-            continue
+            return None
         if not isinstance(response, dict) or not response.get("ok"):
-            results.append(None)
-            continue
+            return None
         result = response.get("result")
         if not isinstance(result, dict):
-            results.append(None)
-            continue
+            return None
         result = _normalize_auto_result(result)
         if "generators" not in result or "order" not in result:
-            results.append(None)
-            continue
-        results.append(result)
+            return None
+        return result
+
+    def _stop_worker(proc: subprocess.Popen[str]) -> None:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        try:
+            proc.communicate(timeout=2.0)
+        except Exception:
+            pass
+
+    results: list[Optional[dict[str, Any]]] = [None, None]
+    if stop_on_first_success:
+        pending = set(range(len(processes)))
+        while pending:
+            finished_any = False
+            for idx in list(pending):
+                proc = processes[idx]
+                if proc.poll() is None:
+                    continue
+                pending.remove(idx)
+                finished_any = True
+                result = _read_worker_result(proc)
+                results[idx] = result
+                if result is not None:
+                    for other_idx in pending:
+                        _stop_worker(processes[other_idx])
+                    return results[0], results[1]
+            if not finished_any:
+                time.sleep(0.05)
+        return results[0], results[1]
+
+    for idx, proc in enumerate(processes):
+        results[idx] = _read_worker_result(proc)
 
     return results[0], results[1]
 
@@ -594,7 +623,11 @@ def _print_python_auto_seed_status(
         print("(potentially incoplete auto group)", flush=True)
     print(f"Auto group size before equivalence search: {order}", flush=True)
     if not found_entire_group and not _auto_result_has_usable_seed(auto_result):
-        limit_text = "core default" if time_limit_seconds is None else str(time_limit_seconds)
+        limit_text = (
+            "until one auto search finishes"
+            if time_limit_seconds is None
+            else str(time_limit_seconds)
+        )
         print(
             "Consider increasing the time limit for the automorphism "
             f"search, time_limit_seconds = {limit_text}",

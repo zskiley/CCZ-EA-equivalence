@@ -14,7 +14,11 @@ def main() -> int:
     truth_table = payload["truth_table"]
     n_bits = int(payload["n_bits"])
     m_bits = int(payload["m_bits"])
-    time_limit_seconds = float(payload["time_limit_seconds"])
+    raw_time_limit_seconds = payload.get("time_limit_seconds")
+    if raw_time_limit_seconds is None:
+        time_limit_seconds = None
+    else:
+        time_limit_seconds = float(raw_time_limit_seconds)
     min_active_hyperplanes = payload["min_active_hyperplanes"]
     cpu_affinity = payload.get("cpu_affinity")
 
