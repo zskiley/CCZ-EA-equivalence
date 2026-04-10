@@ -417,36 +417,13 @@ def _resolve_bits_pair(
     return n, m, f_field, g_field
 
 
-def _default_equivalence_auto_seed_time_limit_seconds(n_bits: int) -> float:
-    if n_bits <= 7:
-        return 2.0
-    if n_bits == 8:
-        return 20.0
-    if n_bits == 9:
-        return 10.0
-    if n_bits == 10:
-        return 10.0
-    if n_bits == 11:
-        return 25.0
-    if n_bits == 12:
-        return 40.0
-    if n_bits == 13:
-        return 100.0
-    if n_bits == 14:
-        return 100.0
-    if n_bits == 15:
-        return 500.0
-    if n_bits == 16:
-        return 500.0
-    return 90.0
-
-
-def _effective_equivalence_auto_seed_time_limit_seconds(
-    n_bits: int, time_limit_seconds: Optional[float]
+def _equivalence_auto_seed_time_limit_seconds_arg(
+    time_limit_seconds: Optional[float],
 ) -> float:
-    if time_limit_seconds is not None:
-        return float(time_limit_seconds)
-    return _default_equivalence_auto_seed_time_limit_seconds(n_bits)
+    if time_limit_seconds is None:
+        # Passing 0.0 to the core means "use the core default table".
+        return 0.0
+    return float(time_limit_seconds)
 
 
 def _auto_worker_script_path() -> Path:
@@ -482,8 +459,8 @@ def _compute_pair_autos_in_parallel(
     if not worker_script.is_file():
         return None, None
 
-    auto_time_limit_seconds = _effective_equivalence_auto_seed_time_limit_seconds(
-        n_bits, time_limit_seconds
+    auto_time_limit_seconds = _equivalence_auto_seed_time_limit_seconds_arg(
+        time_limit_seconds
     )
     worker_affinities = _parallel_auto_worker_affinities()
     payloads = [
@@ -617,9 +594,10 @@ def _print_python_auto_seed_status(
         print("(potentially incoplete auto group)", flush=True)
     print(f"Auto group size before equivalence search: {order}", flush=True)
     if not found_entire_group and not _auto_result_has_usable_seed(auto_result):
+        limit_text = "core default" if time_limit_seconds is None else str(time_limit_seconds)
         print(
             "Consider increasing the time limit for the automorphism "
-            f"search, time_limit_seconds = {time_limit_seconds}",
+            f"search, time_limit_seconds = {limit_text}",
             flush=True,
         )
     print(f"{start_label}{order}", flush=True)
@@ -689,9 +667,7 @@ def ccz_equivalence(
             if selected_auto_group is not None:
                 _print_python_auto_seed_status(
                     f_auto,
-                    _effective_equivalence_auto_seed_time_limit_seconds(
-                        n, time_limit_seconds
-                    ),
+                    time_limit_seconds,
                     "Starting equivalence search with auto group size: ",
                 )
             swapped = _core.ccz_equivalence(
@@ -709,9 +685,7 @@ def ccz_equivalence(
             auto_group = g_auto
             _print_python_auto_seed_status(
                 g_auto,
-                _effective_equivalence_auto_seed_time_limit_seconds(
-                    n, time_limit_seconds
-                ),
+                time_limit_seconds,
                 "Starting equivalence search with auto group size: ",
             )
 
@@ -764,9 +738,7 @@ def ea_equivalence(
             if selected_auto_group is not None:
                 _print_python_auto_seed_status(
                     f_auto,
-                    _effective_equivalence_auto_seed_time_limit_seconds(
-                        n, time_limit_seconds
-                    ),
+                    time_limit_seconds,
                     "Starting EA equivalence search with auto group size: ",
                 )
             swapped = _core.ea_equivalence(
@@ -784,9 +756,7 @@ def ea_equivalence(
             auto_group = g_auto
             _print_python_auto_seed_status(
                 g_auto,
-                _effective_equivalence_auto_seed_time_limit_seconds(
-                    n, time_limit_seconds
-                ),
+                time_limit_seconds,
                 "Starting EA equivalence search with auto group size: ",
             )
 
