@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 import ccz
@@ -15,6 +16,13 @@ def main() -> int:
     m_bits = int(payload["m_bits"])
     time_limit_seconds = float(payload["time_limit_seconds"])
     min_active_hyperplanes = payload["min_active_hyperplanes"]
+    cpu_affinity = payload.get("cpu_affinity")
+
+    if isinstance(cpu_affinity, list) and hasattr(os, "sched_setaffinity"):
+        try:
+            os.sched_setaffinity(0, {int(core) for core in cpu_affinity})
+        except Exception:
+            pass
 
     try:
         if mode == "ccz":

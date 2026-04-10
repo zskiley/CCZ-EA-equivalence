@@ -453,6 +453,22 @@ def _auto_worker_script_path() -> Path:
     return _HERE / "auto_worker.py"
 
 
+def _parallel_auto_worker_affinities() -> list[Optional[list[int]]]:
+    sched_getaffinity = getattr(os, "sched_getaffinity", None)
+    if sched_getaffinity is None:
+        return [None, None]
+
+    try:
+        allowed_cores = sorted(int(core) for core in sched_getaffinity(0))
+    except Exception:
+        return [None, None]
+
+    if len(allowed_cores) < 2:
+        return [None, None]
+
+    return [[allowed_cores[0]], [allowed_cores[1]]]
+
+
 def _compute_pair_autos_in_parallel(
     mode: str,
     f_tt: list[int],
@@ -469,6 +485,7 @@ def _compute_pair_autos_in_parallel(
     auto_time_limit_seconds = _effective_equivalence_auto_seed_time_limit_seconds(
         n_bits, time_limit_seconds
     )
+    worker_affinities = _parallel_auto_worker_affinities()
     payloads = [
         {
             "mode": mode,
@@ -477,6 +494,7 @@ def _compute_pair_autos_in_parallel(
             "m_bits": m_bits,
             "time_limit_seconds": auto_time_limit_seconds,
             "min_active_hyperplanes": min_active_hyperplanes,
+            "cpu_affinity": worker_affinities[0],
         },
         {
             "mode": mode,
@@ -485,6 +503,7 @@ def _compute_pair_autos_in_parallel(
             "m_bits": m_bits,
             "time_limit_seconds": auto_time_limit_seconds,
             "min_active_hyperplanes": min_active_hyperplanes,
+            "cpu_affinity": worker_affinities[1],
         },
     ]
     processes = [
@@ -499,9 +518,17 @@ def _compute_pair_autos_in_parallel(
         for _ in payloads
     ]
 
-    results: list[Optional[dict[str, Any]]] = []
     for proc, payload in zip(processes, payloads):
-        stdout, _stderr = proc.communicate(json.dumps(payload))
+        if proc.stdin is None:
+            continue
+        proc.stdin.write(json.dumps(payload))
+        proc.stdin.close()
+
+    results: list[Optional[dict[str, Any]]] = []
+    for proc in processes:
+        stdout = proc.stdout.read() if proc.stdout is not None else ""
+        _stderr = proc.stderr.read() if proc.stderr is not None else ""
+        proc.wait()
         if proc.returncode != 0:
             results.append(None)
             continue
