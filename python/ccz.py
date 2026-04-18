@@ -19,6 +19,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import sys
+import tempfile
 import time
 from typing import Any, Iterable, Optional
 
@@ -484,17 +485,33 @@ def _compute_pair_autos_in_parallel(
             "cpu_affinity": worker_affinities[1],
         },
     ]
-    processes = [
-        subprocess.Popen(
-            [sys.executable, str(worker_script)],
-            cwd=str(_HERE.parent),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+    processes: list[subprocess.Popen[str]] = []
+    worker_output_paths: list[tuple[Path, Path]] = []
+
+    for _ in payloads:
+        stdout_fd, stdout_path_str = tempfile.mkstemp(
+            prefix="ccz-auto-worker-", suffix=".stdout"
         )
-        for _ in payloads
-    ]
+        stderr_fd, stderr_path_str = tempfile.mkstemp(
+            prefix="ccz-auto-worker-", suffix=".stderr"
+        )
+        os.close(stdout_fd)
+        os.close(stderr_fd)
+        stdout_path = Path(stdout_path_str)
+        stderr_path = Path(stderr_path_str)
+        worker_output_paths.append((stdout_path, stderr_path))
+        with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open(
+            "w", encoding="utf-8"
+        ) as stderr_file:
+            proc = subprocess.Popen(
+                [sys.executable, str(worker_script)],
+                cwd=str(_HERE.parent),
+                stdin=subprocess.PIPE,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+            )
+        processes.append(proc)
 
     for proc, payload in zip(processes, payloads):
         if proc.stdin is None:
@@ -502,12 +519,14 @@ def _compute_pair_autos_in_parallel(
         proc.stdin.write(json.dumps(payload))
         proc.stdin.close()
 
-    def _read_worker_result(proc: subprocess.Popen[str]) -> Optional[dict[str, Any]]:
-        stdout, _stderr = proc.communicate()
+    def _read_worker_result(
+        proc: subprocess.Popen[str], stdout_path: Path
+    ) -> Optional[dict[str, Any]]:
+        proc.wait()
         if proc.returncode != 0:
             return None
         try:
-            response = json.loads(stdout)
+            response = json.loads(stdout_path.read_text(encoding="utf-8"))
         except Exception:
             return None
         if not isinstance(response, dict) or not response.get("ok"):
@@ -527,36 +546,42 @@ def _compute_pair_autos_in_parallel(
                 proc.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        try:
-            proc.communicate(timeout=2.0)
-        except Exception:
-            pass
 
     results: list[Optional[dict[str, Any]]] = [None, None]
-    if stop_on_first_success:
-        pending = set(range(len(processes)))
-        while pending:
-            finished_any = False
-            for idx in list(pending):
-                proc = processes[idx]
-                if proc.poll() is None:
-                    continue
-                pending.remove(idx)
-                finished_any = True
-                result = _read_worker_result(proc)
-                results[idx] = result
-                if result is not None:
-                    for other_idx in pending:
-                        _stop_worker(processes[other_idx])
-                    return results[0], results[1]
-            if not finished_any:
-                time.sleep(0.05)
+    try:
+        if stop_on_first_success:
+            pending = set(range(len(processes)))
+            while pending:
+                finished_any = False
+                for idx in list(pending):
+                    proc = processes[idx]
+                    if proc.poll() is None:
+                        continue
+                    pending.remove(idx)
+                    finished_any = True
+                    result = _read_worker_result(proc, worker_output_paths[idx][0])
+                    results[idx] = result
+                    if result is not None:
+                        for other_idx in pending:
+                            _stop_worker(processes[other_idx])
+                        return results[0], results[1]
+                if not finished_any:
+                    time.sleep(0.05)
+            return results[0], results[1]
+
+        for idx, proc in enumerate(processes):
+            results[idx] = _read_worker_result(proc, worker_output_paths[idx][0])
+
         return results[0], results[1]
-
-    for idx, proc in enumerate(processes):
-        results[idx] = _read_worker_result(proc)
-
-    return results[0], results[1]
+    finally:
+        for proc in processes:
+            _stop_worker(proc)
+        for stdout_path, stderr_path in worker_output_paths:
+            for path in (stdout_path, stderr_path):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
 
 
 def _auto_result_order(auto_result: Optional[dict[str, Any]]) -> Optional[int]:
