@@ -14,22 +14,6 @@ namespace algorithms {
 
 namespace {
 
-double DefaultAutoSeedTimeLimitSeconds(const GraphData& F) {
-  const int n = F.n_bits;
-
-  if (n <= 7) return 10.0;
-  if (n == 8) return 20.0;
-  if (n == 9) return 150.0;
-  if (n == 10) return 150.0;
-  if (n == 11) return 300.0;
-  if (n == 12) return 300.0;
-  if (n==13) return 1000;
-  if (n==14) return 1000;
-  if (n==15) return 3600;
-  if (n==16) return 3600;
-  return 90.0;
-}
-
 std::vector<groups::Permutation> ExtractAutoGroupGenerators(
     std::size_t degree) {
   std::vector<groups::Permutation> seed_generators = GetAutoGroupGenerators();
@@ -83,7 +67,7 @@ std::optional<EquivalencePointMap> ccz_equivalence(const GraphData& F,
                                                    std::size_t min_active_hyperplanes) {
   const double auto_timelimit = timelimit_seconds.has_value()
                                     ? *timelimit_seconds
-                                    : DefaultAutoSeedTimeLimitSeconds(F);
+                                    : 0.0;
   // Orbit pruning during equivalence search acts on the right-hand graph,
   // so seed with a subgroup of Aut(G), not Aut(F).
   (void)ccz_auto(G, auto_timelimit, min_active_hyperplanes);
@@ -104,7 +88,7 @@ std::optional<EquivalencePointMap> ea_equivalence(
     std::size_t min_active_hyperplanes) {
   const double auto_timelimit = timelimit_seconds.has_value()
                                     ? *timelimit_seconds
-                                    : DefaultAutoSeedTimeLimitSeconds(F);
+                                    : 0.0;
   // Orbit pruning during equivalence search acts on the right-hand graph,
   // so seed with a subgroup of Aut(G), not Aut(F).
   (void)ea_auto(G, auto_timelimit, min_active_hyperplanes);
