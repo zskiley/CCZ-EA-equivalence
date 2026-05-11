@@ -14,13 +14,6 @@ From a source checkout:
 sage -python python/build.py
 ```
 
-For development without Sage, the native extension can also be built with a
-regular Python interpreter:
-
-```bash
-python python/build.py
-```
-
 The public `ccz_auto`, `ea_auto`, `ccz_equivalence`, and `ea_equivalence`
 functions require Sage at runtime because they return Sage objects.
 

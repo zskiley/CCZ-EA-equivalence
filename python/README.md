@@ -5,12 +5,6 @@
 From repository root:
 
 ```bash
-python python/build.py
-```
-
-For Sage compatibility:
-
-```bash
 sage -python python/build.py
 ```
 
