@@ -14,8 +14,41 @@ From a source checkout:
 sage -python python/build.py
 ```
 
-The public `ccz_auto`, `ea_auto`, `ccz_equivalence`, and `ea_equivalence`
-functions require Sage at runtime because they return Sage objects.
+## Example Usage
+
+```python
+import ccz
+
+f = [0, 1, 2, 3, 4, 5, 6, 7]
+g = [0, 1, 2, 3, 4, 5, 6, 7]
+
+F = (f, 3, 3)
+H = (g, 3, 3)
+
+AutF, complete = ccz.ea_auto(F)
+T = ccz.ea_equivalence(F, H, right_auto=AutF)
+
+print(AutF.order(), complete)
+print(T is not None)
+```
+
+Sage polynomial inputs are also accepted:
+
+```python
+import ccz
+from sage.all import GF, PolynomialRing
+
+n = 8
+K = GF(2**n, name="a")
+R = PolynomialRing(K, "x")
+x = R.gen()
+
+AutF, complete = ccz.ccz_auto((x**3, n, n), time_limit=20)
+
+print(AutF.order())
+print(complete)
+print(AutF.gens())
+```
 
 ## Function Inputs
 
@@ -80,24 +113,6 @@ is represented as the homogeneous matrix
 `complete` is `True` if the automorphism search finished before the timeout.
 If `complete` is `False`, `G` is only the subgroup found before timeout.
 
-Example:
-
-```python
-import ccz
-from sage.all import GF, PolynomialRing
-
-n = 8
-K = GF(2**n, name="a")
-R = PolynomialRing(K, "x")
-x = R.gen()
-
-G, complete = ccz.ccz_auto((x**3, n, n), time_limit=20)
-
-print(G.order())
-print(complete)
-print(G.gens())
-```
-
 Rectangular truth-table example:
 
 ```python
@@ -139,21 +154,6 @@ The return value is either:
 - `None`, if no equivalence is found, or
 - a Sage matrix over `GF(2)` representing one affine equivalence as a
   homogeneous matrix.
-
-Example:
-
-```python
-import ccz
-
-f = [0, 1, 2, 3, 4, 5, 6, 7]
-g = [0, 1, 2, 3, 4, 5, 6, 7]
-
-T = ccz.ccz_equivalence((f, 3, 3), (g, 3, 3))
-
-if T is not None:
-    print("Equivalent")
-    print(T)
-```
 
 ## Parallel Equivalence Behavior
 
