@@ -25,33 +25,25 @@ import ccz
 f = [0, 1, 2, 3, 4, 5, 6, 7]
 g = [0, 1, 2, 3, 4, 5, 6, 7]
 
-auto = ccz.ea_auto(f)
-eq = ccz.ea_equivalence(f, g, auto_group=auto)
+G, complete = ccz.ea_auto((f, 3, 3))
+eq = ccz.ea_equivalence(f, g, auto_group=G)
 
-print(auto["order"], eq is not None)
+print(G.order(), complete, eq is not None)
 ```
 
 ## Return value of `ccz_auto(...)` / `ea_auto(...)`
 
-Returns a dictionary with:
+Automorphism functions require Sage and return:
 
-- `order`
-- `found_entire_group`
-- `generators`
-- `graph_generators`
+```python
+(G, complete)
+```
 
-`generators` is a list of ambient affine generators. Each entry has
-`translation` and `linear_cols`; the columns encode the linear part by
-`linear_cols[i] = A(1 << i)`.
-
-`graph_generators` is the same discovered group action represented as graph
-point maps using the encoding `p = x | (y << n)`.
-
-These same generators can be passed back into
+`G` is a Sage `MatrixGroup` over `GF(2)` representing affine maps as
+homogeneous matrices, and `complete` reports whether the auto search finished
+before timeout. `G` or the full `(G, complete)` tuple can be passed back into
 `ccz.ccz_equivalence(..., auto_group=...)` or
-`ccz.ea_equivalence(..., auto_group=...)`. The full auto-result dict carries
-both `generators` and `graph_generators`; equivalence will use whichever seed
-data is available.
+`ccz.ea_equivalence(..., auto_group=...)`.
 
 By default, equivalence also runs a parallel auto-seeding heuristic: it
 computes auto seeds for both inputs, prefers the larger discovered seed on the

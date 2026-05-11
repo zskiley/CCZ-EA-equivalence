@@ -14,48 +14,17 @@ If you install from a specific branch/tag:
 pip install "git+https://github.com/zskiley/CCZ-EA-equivalence.git@main"
 ```
 
-## Quick Python usage
+## Quick usage
 
 Supported Python inputs:
 - truth tables (`list[int]` / sequence of integers)
 - `galois.Poly`
 - Sage polynomials
 
-### 1) galois (finite-field polynomial)
+Automorphism functions return Sage matrix groups, so run them in Sage or with
+`sage -python`.
 
-```python
-import ccz
-import galois
-
-n = 9
-F = galois.GF(2**n)
-x = galois.Poly.Identity(F)
-
-f = x**3
-g = x**5
-
-auto = ccz.ccz_auto(f)
-eq = ccz.ccz_equivalence(f, g)
-
-print(auto["order"], eq is not None)
-```
-
-### 2) Truth table
-
-```python
-import ccz
-
-# n = 3 truth tables (length = 2^3 = 8)
-f_tt = [0, 1, 2, 3, 4, 5, 6, 7]
-g_tt = [0, 1, 2, 3, 4, 5, 6, 7]
-
-auto = ccz.ccz_auto(f_tt)
-eq = ccz.ccz_equivalence(f_tt, g_tt)
-
-print(auto["order"], eq is not None)
-```
-
-### 3) SageMath polynomial
+### 1) Automorphism group in Sage
 
 ```python
 import ccz
@@ -66,20 +35,40 @@ K = GF(2**n, name="a")
 R = PolynomialRing(K, "x")
 x = R.gen()
 
-f = x**3
-g = x**5
+G, complete = ccz.ccz_auto(x**3)
 
-auto = ccz.ccz_auto(f)
-eq = ccz.ccz_equivalence(f, g)
-
-print(auto["order"], eq is not None)
+print(G.order(), complete)
 ```
 
-## Recomendations
-If the goal is to prove that two functions are equivalent then setting time_limit_seconds to a low value is recomended, 
-as the auto group is that that useful in that case.
-If one wants to determine inequivalence hovever the auto group is often essential. 
+For rectangular functions, pass the explicit function tuple `(f, n, m)`:
 
+```python
+import ccz
+
+f = [0, 1, 2, 3, 0, 1, 2, 3]  # F_2^3 -> F_2^2
+
+G, complete = ccz.ea_auto((f, 3, 2))
+
+print(G.order(), complete)
+```
+
+### 2) Equivalence
+
+```python
+import ccz
+
+f_tt = [0, 1, 2, 3, 4, 5, 6, 7]
+g_tt = [0, 1, 2, 3, 4, 5, 6, 7]
+
+eq = ccz.ccz_equivalence(f_tt, g_tt)
+
+print(eq is not None)
+```
+
+## Recommendations
+If the goal is to prove that two functions are equivalent, setting
+`time_limit_seconds` to a low value can be useful. If the goal is to prove
+inequivalence, the automorphism group is often essential.
 
 ## Available API
 
@@ -87,25 +76,26 @@ If one wants to determine inequivalence hovever the auto group is often essentia
 
 ```python
 ccz.ccz_auto(
-    values_or_fn,
-    time_limit_seconds=None,
+    function_input,
+    time_limit=None,
     min_active_hyperplanes=None,
 )
 ```
 
-- `values_or_fn`: truth table, `galois.Poly`, or Sage polynomial.
-- Input/output dimensions are inferred automatically:
-  truth-table length gives `n`, and table values (or polynomial field degree)
-  determine `m`.
-- `time_limit_seconds`: optional auto-search timeout.
+- `function_input`: either `(f, n, m)` or a bare truth table / polynomial.
+  Bare inputs infer `n` and use `m = n`.
+- `time_limit`: optional auto-search timeout in seconds.
 - `min_active_hyperplanes`: optional refinement budget override.
+- returns `(G, complete)`, where `G` is a Sage `MatrixGroup` over `GF(2)`
+  acting on homogeneous vectors of length `n + m + 1`, and `complete` reports
+  whether the search finished before timeout.
 
 ### `ccz.ea_auto(...)`
 
 ```python
 ccz.ea_auto(
-    values_or_fn,
-    time_limit_seconds=None,
+    function_input,
+    time_limit=None,
     min_active_hyperplanes=None,
 )
 ```
@@ -127,16 +117,18 @@ ccz.ccz_equivalence(
 
 - `f_values_or_fn`, `g_values_or_fn`: truth tables, `galois.Poly`, or Sage
   polynomials.
-- dimensions are inferred automatically (as in `ccz.ccz_auto(...)`).
+- dimensions are inferred automatically from truth-table length or polynomial
+  field degree.
 - `time_limit_seconds`, `min_active_hyperplanes`:
   same meaning as in `ccz.ccz_auto(...)`.
 - `auto_group`: optional precomputed automorphism group seed.
   Accepts either:
+  - a Sage `MatrixGroup` returned by `ccz_auto`/`ea_auto`,
+  - the `(G, complete)` tuple returned by `ccz_auto`/`ea_auto`,
   - a `list[dict[int, int]]` of graph-point generators,
   - a `list[{"translation": int, "linear_cols": list[int]}]` of ambient
     affine generators, or
-  - the full auto-result dict from `ccz_auto`/`ea_auto`
-    (uses its `"generators"` and/or `"graph_generators"` fields).
+  - a raw auto-result dict from the native binding.
 - `parallel_auto_seed`: enabled by default for equivalence.
   When `auto_group` is not supplied, the wrapper computes automorphism seeds for
   both inputs in parallel, prefers the larger discovered seed on the right-hand
@@ -162,22 +154,18 @@ Parameters are the same as `ccz.ccz_equivalence(...)`.
 
 ### `ccz_auto(...)` / `ea_auto(...)`
 
-Returns a dictionary:
+Returns `(G, complete)`.
 
-- `order: int`
-  : automorphism-group order found by the algorithm.
-- `found_entire_group: bool`
-  : `True` if search finished before timeout, `False` if timeout was hit.
-- `generators: list[{"translation": int, "linear_cols": list[int]}]`
-  : ambient affine generators on `F_2^(n+m)`.
-- `graph_generators: list[dict[int, int]]`
-  : the same discovered generators as permutations of graph points, for
-    equivalence seeding and compatibility.
+- `G`: Sage `MatrixGroup` over `GF(2)`.
+- `complete`: `True` if search finished before timeout, `False` if timeout was
+  hit.
 
-For an ambient affine generator, `translation` is the affine offset and
-`linear_cols[i]` is the image of basis vector `1 << i`. Graph-point generators
-are dicts mapping graph points to graph points using the encoding
-`p = x | (y << n)`.
+Affine maps `z -> Lz + t` are represented as homogeneous matrices:
+
+```text
+[ L  t ]
+[ 0  1 ]
+```
 
 ### `ccz_equivalence(...)` / `ea_equivalence(...)`
 
@@ -194,8 +182,8 @@ You may pass:
 - a `list[dict[int, int]]` of graph-point generators,
 - a `list[{"translation": int, "linear_cols": list[int]}]` of ambient affine
   generators, or
-- the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
-  available `"graph_generators"` and/or `"generators"` fields).
+- a Sage `MatrixGroup`, or the `(G, complete)` tuple returned by
+  `ccz_auto`/`ea_auto`.
 
 If `auto_group` is provided, it is used directly and the default parallel
 auto-seeding heuristic is skipped.

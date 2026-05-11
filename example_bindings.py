@@ -34,29 +34,29 @@ def main() -> None:
         f_ff = x**3
         g_ff = x**5
         print("galois.Poly x^3 vs x^5, n=", n_galois)
-        auto_group_ccz = _timed(
+        auto_group_ccz, ccz_complete = _timed(
             "galois.ccz_auto(g) (seed group, time-limited)",
             lambda: ccz.ccz_auto(g_ff),
         )
         print(
             "seed order=",
-            auto_group_ccz["order"],
+            auto_group_ccz.order(),
             "generators=",
-            len(auto_group_ccz["generators"]),
+            len(auto_group_ccz.gens()),
             "complete=",
-            auto_group_ccz["found_entire_group"],
+            ccz_complete,
         )
-        auto_group_ea = _timed(
+        auto_group_ea, ea_complete = _timed(
             "galois.ea_auto(g) (seed group, time-limited)",
             lambda: ccz.ea_auto(g_ff),
         )
         print(
             "ea seed order=",
-            auto_group_ea["order"],
+            auto_group_ea.order(),
             "generators=",
-            len(auto_group_ea["generators"]),
+            len(auto_group_ea.gens()),
             "complete=",
-            auto_group_ea["found_entire_group"],
+            ea_complete,
         )
         res1 = _timed(
             "galois.ccz_equivalence (poly)",
@@ -83,21 +83,21 @@ def main() -> None:
         print(
             f"galois.Poly Kasami, n={n_kasami}, i={i_kasami}, d={d_kasami}"
         )
-        res3 = _timed(
+        kasami_group, kasami_complete = _timed(
             "galois.ccz_auto (Kasami poly, time-limited)",
             lambda: ccz.ccz_auto(kasami),
         )
         print(
             "kasami seed order=",
-            res3["order"],
+            kasami_group.order(),
             "generators=",
-            len(res3["generators"]),
+            len(kasami_group.gens()),
             "complete=",
-            res3["found_entire_group"],
+            kasami_complete,
         )
         _timed(
             "galois.ea_auto (Kasami poly, time-limited)",
-            lambda: ccz.ea_auto(kasami, time_limit_seconds=2.0),
+            lambda: ccz.ea_auto(kasami, time_limit=2.0),
         )
 
     except Exception as exc:

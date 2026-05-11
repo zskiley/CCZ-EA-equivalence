@@ -145,18 +145,18 @@ def main() -> int:
     if args.mode in ("all", "ccz_auto"):
         auto = run_and_time(
             "ccz_auto",
-            lambda: ccz.ccz_auto(
-                tt_f, time_limit_seconds=args.time_limit
-            ),
+            lambda: ccz._raw_ccz_auto(  # pylint: disable=protected-access
+                tt_f, time_limit=args.time_limit
+            )[0],
         )
         print(f"ccz_auto order: {auto['order']}\n")
 
     if args.mode in ("all", "ea_auto"):
         auto = run_and_time(
             "ea_auto",
-            lambda: ccz.ea_auto(
-                tt_f, time_limit_seconds=args.time_limit
-            ),
+            lambda: ccz._raw_ea_auto(  # pylint: disable=protected-access
+                tt_f, time_limit=args.time_limit
+            )[0],
         )
         print(f"ea_auto order: {auto['order']}\n")
 

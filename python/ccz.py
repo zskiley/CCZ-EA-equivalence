@@ -419,6 +419,62 @@ def _resolve_bits_pair(
     return n, m, f_field, g_field
 
 
+def _normalize_function_input(function_input: Any) -> tuple[list[int], int, int]:
+    if isinstance(function_input, tuple) and len(function_input) == 3:
+        values_or_fn, n_bits, m_bits = function_input
+        n = int(n_bits)
+        m = int(m_bits)
+        _validate_supported_input(values_or_fn, "function_input[0]")
+        field = _field_from_callable(values_or_fn)
+        if _is_galois_poly(values_or_fn):
+            field = values_or_fn.field
+        return _to_truth_table(values_or_fn, n, m, field=field), n, m
+
+    n, _m, inferred_field = _resolve_bits_single(
+        function_input, None, None, None
+    )
+    return _to_truth_table(function_input, n, n, field=inferred_field), n, n
+
+
+def _resolve_time_limit(
+    time_limit: Optional[float],
+    kwargs: dict[str, Any],
+) -> Optional[float]:
+    if "time_limit_seconds" in kwargs:
+        legacy_time_limit = kwargs.pop("time_limit_seconds")
+        if time_limit is not None:
+            raise TypeError(
+                "pass only one of time_limit and time_limit_seconds"
+            )
+        time_limit = legacy_time_limit
+    if kwargs:
+        names = ", ".join(sorted(kwargs))
+        raise TypeError(f"unexpected keyword argument(s): {names}")
+    if time_limit is None:
+        return None
+    return float(time_limit)
+
+
+def _raw_ccz_auto(
+    function_input: Any,
+    time_limit: Optional[float] = None,
+    min_active_hyperplanes: Optional[int] = None,
+) -> tuple[dict[str, Any], int, int]:
+    tt, n, m = _normalize_function_input(function_input)
+    result = _core.ccz_auto(tt, n, m, time_limit, min_active_hyperplanes)
+    return result, n, m
+
+
+def _raw_ea_auto(
+    function_input: Any,
+    time_limit: Optional[float] = None,
+    min_active_hyperplanes: Optional[int] = None,
+) -> tuple[dict[str, Any], int, int]:
+    tt, n, m = _normalize_function_input(function_input)
+    result = _core.ea_auto(tt, n, m, time_limit, min_active_hyperplanes)
+    return result, n, m
+
+
 def _equivalence_auto_seed_time_limit_seconds_arg(
     time_limit_seconds: Optional[float],
 ) -> Optional[float]:
@@ -652,6 +708,54 @@ def _invert_equivalence_point_map(point_map: Optional[dict[int, int]]):
     return {int(v): int(k) for k, v in point_map.items()}
 
 
+def _matrix_entry_bit(value: Any) -> int:
+    return int(value) & 1
+
+
+def _sage_matrix_to_affine_generator(matrix_like: Any, ambient_dimension: int):
+    matrix_obj = matrix_like.matrix() if hasattr(matrix_like, "matrix") else matrix_like
+    expected = ambient_dimension + 1
+    if matrix_obj.nrows() != expected or matrix_obj.ncols() != expected:
+        raise ValueError("auto_group Sage generator has wrong matrix dimension")
+
+    for col in range(ambient_dimension):
+        if _matrix_entry_bit(matrix_obj[ambient_dimension, col]) != 0:
+            raise ValueError("auto_group Sage generator is not affine-homogeneous")
+    if _matrix_entry_bit(matrix_obj[ambient_dimension, ambient_dimension]) != 1:
+        raise ValueError("auto_group Sage generator is not affine-homogeneous")
+
+    translation = 0
+    for row in range(ambient_dimension):
+        translation |= _matrix_entry_bit(matrix_obj[row, ambient_dimension]) << row
+
+    linear_cols: list[int] = []
+    for col in range(ambient_dimension):
+        encoded_col = 0
+        for row in range(ambient_dimension):
+            encoded_col |= _matrix_entry_bit(matrix_obj[row, col]) << row
+        linear_cols.append(encoded_col)
+
+    return {"translation": translation, "linear_cols": linear_cols}
+
+
+def _auto_group_for_core(auto_group: Any, n_bits: int, m_bits: int) -> Any:
+    if auto_group is None:
+        return None
+
+    candidate = auto_group
+    if isinstance(candidate, tuple) and len(candidate) == 2:
+        candidate = candidate[0]
+
+    if hasattr(candidate, "gens"):
+        ambient_dimension = n_bits + m_bits
+        return [
+            _sage_matrix_to_affine_generator(generator, ambient_dimension)
+            for generator in candidate.gens()
+        ]
+
+    return auto_group
+
+
 def _print_python_auto_seed_status(
     auto_result: dict[str, Any],
     time_limit_seconds: Optional[float],
@@ -680,24 +784,91 @@ def _print_python_auto_seed_status(
     print(f"{start_label}{order}", flush=True)
 
 
-def ccz_auto(
-    values_or_fn: Iterable[int] | Any,
-    time_limit_seconds: Optional[float] = None,
-    min_active_hyperplanes: Optional[int] = None,
+def _sage_constructors():
+    try:
+        from sage.all import GF, MatrixGroup, identity_matrix, matrix
+    except Exception as exc:  # pragma: no cover
+        raise ImportError(
+            "ccz_auto and ea_auto now return Sage MatrixGroup objects. "
+            "Run them with Sage Python, for example `sage -python`, or from "
+            "inside Sage."
+        ) from exc
+    return GF, MatrixGroup, identity_matrix, matrix
+
+
+def _affine_generator_to_sage_matrix(
+    generator: dict[str, Any],
+    ambient_dimension: int,
+    field: Any,
+    matrix_ctor: Any,
 ):
-    n, m, inferred_field = _resolve_bits_single(values_or_fn, None, None, None)
-    tt = _to_truth_table(values_or_fn, n, m, field=inferred_field)
-    return _core.ccz_auto(tt, n, m, time_limit_seconds, min_active_hyperplanes)
+    translation = int(generator["translation"])
+    linear_cols = [int(col) for col in generator["linear_cols"]]
+    if len(linear_cols) != ambient_dimension:
+        raise ValueError("affine generator has wrong ambient dimension")
+
+    rows: list[list[int]] = []
+    for row in range(ambient_dimension):
+        rows.append(
+            [
+                (linear_cols[col] >> row) & 1
+                for col in range(ambient_dimension)
+            ]
+            + [(translation >> row) & 1]
+        )
+    rows.append([0] * ambient_dimension + [1])
+    return matrix_ctor(field, rows)
+
+
+def _auto_result_to_sage_group(
+    auto_result: dict[str, Any],
+    n_bits: int,
+    m_bits: int,
+    sage_constructors: tuple[Any, Any, Any, Any],
+):
+    GF, MatrixGroup, identity_matrix, matrix_ctor = sage_constructors
+    field = GF(2)
+    ambient_dimension = n_bits + m_bits
+    homogeneous_dimension = ambient_dimension + 1
+    generators = [
+        _affine_generator_to_sage_matrix(
+            generator, ambient_dimension, field, matrix_ctor
+        )
+        for generator in auto_result.get("generators", [])
+    ]
+    if not generators:
+        generators = [identity_matrix(field, homogeneous_dimension)]
+    return MatrixGroup(generators)
+
+
+def ccz_auto(
+    function_input: Any,
+    time_limit: Optional[float] = None,
+    min_active_hyperplanes: Optional[int] = None,
+    **kwargs: Any,
+):
+    time_limit = _resolve_time_limit(time_limit, kwargs)
+    sage_constructors = _sage_constructors()
+    auto_result, n, m = _raw_ccz_auto(
+        function_input, time_limit, min_active_hyperplanes
+    )
+    group = _auto_result_to_sage_group(auto_result, n, m, sage_constructors)
+    return group, bool(auto_result.get("found_entire_group"))
 
 
 def ea_auto(
-    values_or_fn: Iterable[int] | Any,
-    time_limit_seconds: Optional[float] = None,
+    function_input: Any,
+    time_limit: Optional[float] = None,
     min_active_hyperplanes: Optional[int] = None,
+    **kwargs: Any,
 ):
-    n, m, inferred_field = _resolve_bits_single(values_or_fn, None, None, None)
-    tt = _to_truth_table(values_or_fn, n, m, field=inferred_field)
-    return _core.ea_auto(tt, n, m, time_limit_seconds, min_active_hyperplanes)
+    time_limit = _resolve_time_limit(time_limit, kwargs)
+    sage_constructors = _sage_constructors()
+    auto_result, n, m = _raw_ea_auto(
+        function_input, time_limit, min_active_hyperplanes
+    )
+    group = _auto_result_to_sage_group(auto_result, n, m, sage_constructors)
+    return group, bool(auto_result.get("found_entire_group"))
 
 
 def ccz_equivalence(
@@ -766,8 +937,15 @@ def ccz_equivalence(
                 "Starting equivalence search with auto group size: ",
             )
 
+    core_auto_group = _auto_group_for_core(auto_group, n, m)
     return _core.ccz_equivalence(
-        f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
+        f_tt,
+        g_tt,
+        n,
+        m,
+        time_limit_seconds,
+        min_active_hyperplanes,
+        core_auto_group,
     )
 
 
@@ -837,8 +1015,15 @@ def ea_equivalence(
                 "Starting EA equivalence search with auto group size: ",
             )
 
+    core_auto_group = _auto_group_for_core(auto_group, n, m)
     return _core.ea_equivalence(
-        f_tt, g_tt, n, m, time_limit_seconds, min_active_hyperplanes, auto_group
+        f_tt,
+        g_tt,
+        n,
+        m,
+        time_limit_seconds,
+        min_active_hyperplanes,
+        core_auto_group,
     )
 
 
