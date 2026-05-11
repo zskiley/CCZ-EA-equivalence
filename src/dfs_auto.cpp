@@ -19,6 +19,7 @@ std::vector<GraphPointMap> g_found_autos;
 uint64_t g_group_epoch = 0;
 std::optional<groups::GraphPointIndex> g_graph_point_index;
 std::vector<groups::Permutation> g_global_generators;
+std::vector<AffineMapData> g_global_affine_generators;
 std::optional<groups::SchreierSims> g_global_group;
 bool g_use_ea_validation = false;
 bool g_has_time_limit = false;
@@ -33,6 +34,17 @@ uint64_t SaturatingMulU64(uint64_t a, uint64_t b) {
   return a * b;
 }
 
+void AddAffineGenerator(AffineMapData map) {
+  if (map.IsIdentity()) return;
+  for (const AffineMapData& existing : g_global_affine_generators) {
+    if (existing.translation == map.translation &&
+        existing.linear_cols == map.linear_cols) {
+      return;
+    }
+  }
+  g_global_affine_generators.push_back(std::move(map));
+}
+
 bool IsTimedOut() {
   if (!g_has_time_limit) return false;
   if (std::chrono::steady_clock::now() < g_deadline) return false;
@@ -40,7 +52,8 @@ bool IsTimedOut() {
   return true;
 }
 
-bool RegisterLeafPermutation(const GraphPointMap& map) {
+bool RegisterLeafPermutation(const GraphPointMap& map,
+                             AffineMapData affine_map) {
   if (!g_graph_point_index.has_value() || !g_global_group.has_value()) return false;
 
   groups::Permutation perm;
@@ -51,6 +64,7 @@ bool RegisterLeafPermutation(const GraphPointMap& map) {
   if (g_global_group->Contains(perm)) return false;
 
   g_global_generators.push_back(std::move(perm));
+  AddAffineGenerator(std::move(affine_map));
   g_global_generators =
       groups::DeduplicateGenerators(std::move(g_global_generators));
   g_global_group->SetGenerators(g_global_generators);
@@ -81,7 +95,15 @@ bool TryFinalizeCurrentMap(const GraphData& F, const PartialAffineMap& A) {
     if (!y.has_value()) return false;
     map.push_back({F.points[i], *y});
   }
-  if (!RegisterLeafPermutation(map)) return false;
+  AffineMapData affine_map;
+  if (g_use_ea_validation) {
+    if (!A.ExtractRepresentativeAffineMap(&affine_map, F.n_bits, F.m_bits)) {
+      return false;
+    }
+  } else if (!A.ExtractRepresentativeAffineMap(&affine_map)) {
+    return false;
+  }
+  if (!RegisterLeafPermutation(map, std::move(affine_map))) return false;
   g_found_autos.push_back(std::move(map));
   return true;
 }
@@ -92,6 +114,7 @@ void ResetAutoSearch() {
   g_group_epoch = 0;
   g_graph_point_index.reset();
   g_global_generators.clear();
+  g_global_affine_generators.clear();
   g_global_group.reset();
   g_has_time_limit = false;
   g_auto_search_timed_out = false;
@@ -129,6 +152,10 @@ const std::vector<groups::Permutation>& GetAutoGroupGenerators() {
   return g_global_generators;
 }
 
+const std::vector<AffineMapData>& GetAffineAutoGenerators() {
+  return g_global_affine_generators;
+}
+
 const std::vector<GraphPointMap>& GetFoundAutos() { return g_found_autos; }
 
 void InitializeGroupSearch(const GraphData& F) {
@@ -136,17 +163,25 @@ void InitializeGroupSearch(const GraphData& F) {
 
   g_graph_point_index = std::move(index);
   g_global_generators.clear();
+  g_global_affine_generators =
+      BuildKernelAffineGenerators(F, g_use_ea_validation);
   g_global_group.emplace(F.points.size());
   g_global_group->SetGenerators({});
   g_global_group->Build();
   g_group_epoch = 0;
-  g_kernel_order = KernelAffineOrder(F);
+  g_kernel_order = KernelAffineOrder(F, g_use_ea_validation);
 }
 
 void AddInitialGroupGenerators(std::vector<groups::Permutation> generators) {
   groups::AddInitialGroupGeneratorsImpl(
       g_graph_point_index, &g_global_group, &g_global_generators,
       &g_group_epoch, std::move(generators));
+}
+
+void AddInitialAffineGenerators(std::vector<AffineMapData> generators) {
+  for (AffineMapData& generator : generators) {
+    AddAffineGenerator(std::move(generator));
+  }
 }
 
 DfsGroupState MakeRootGroupState() {
@@ -160,6 +195,7 @@ void SetComputedAutoGroup(std::vector<GraphPointMap> autos,
                           bool timed_out) {
   g_found_autos = std::move(autos);
   g_global_generators = groups::DeduplicateGenerators(std::move(generators));
+  g_global_affine_generators.clear();
   if (g_global_group.has_value()) {
     g_global_group->SetGenerators(g_global_generators);
     g_global_group->Build();

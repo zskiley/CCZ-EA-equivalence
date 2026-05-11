@@ -27,9 +27,11 @@ bool FoundEntireAutoGroup();
 uint64_t GetTotalAutoGroup();
 uint64_t GetGraphActionAutoGroup();
 const std::vector<groups::Permutation>& GetAutoGroupGenerators();
+const std::vector<AffineMapData>& GetAffineAutoGenerators();
 const std::vector<GraphPointMap>& GetFoundAutos();
 void InitializeGroupSearch(const GraphData& F);
 void AddInitialGroupGenerators(std::vector<groups::Permutation> generators);
+void AddInitialAffineGenerators(std::vector<AffineMapData> generators);
 DfsGroupState MakeRootGroupState();
 void SetComputedAutoGroup(std::vector<GraphPointMap> autos,
                           std::vector<groups::Permutation> generators,

@@ -50,7 +50,8 @@ class PartialAffineMap {
   // any known pure output-space direction must map back into the output space.
   bool PreservesOutputSubspace(int n_bits, int m_bits) const;
   // Returns one full affine extension consistent with the current partial map.
-  bool ExtractRepresentativeAffineMap(AffineMapData* out) const;
+  bool ExtractRepresentativeAffineMap(AffineMapData* out, int n_bits = 0,
+                                      int m_bits = 0) const;
 
  private:
   bool TryExpressDx(uint32_t dx, uint64_t* coeff_mask) const;

@@ -5,13 +5,14 @@
 #include <exception>
 #include <limits>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "algorithms.h"
-#include "ambient_affine.h"
 #include "ccz_equivalence.h"
 #include "dfs_auto.h"
 #include "ea_equivalence.h"
+#include "gf2_linear.h"
 #include "graph.h"
 #include "groups/graph_point_perm.h"
 #include "groups/group_ops.h"
@@ -293,53 +294,56 @@ PyObject* GeneratorListToPyList(const GraphData& graph,
   return out;
 }
 
-PyObject* AmbientGeneratorToPyDict(const AffineMapData& map) {
-  PyObject* out = PyDict_New();
-  if (out == nullptr) return nullptr;
+PyObject* AmbientGeneratorToPyDict(const AffineMapData& generator) {
+  PyObject* dict = PyDict_New();
+  if (dict == nullptr) return nullptr;
 
-  PyObject* translation_obj =
-      PyLong_FromUnsignedLong(static_cast<unsigned long>(map.translation));
+  PyObject* translation_obj = PyLong_FromUnsignedLong(
+      static_cast<unsigned long>(generator.translation));
   if (translation_obj == nullptr) {
-    Py_DECREF(out);
+    Py_DECREF(dict);
     return nullptr;
   }
-  if (PyDict_SetItemString(out, "translation", translation_obj) != 0) {
+  if (PyDict_SetItemString(dict, "translation", translation_obj) != 0) {
     Py_DECREF(translation_obj);
-    Py_DECREF(out);
+    Py_DECREF(dict);
     return nullptr;
   }
   Py_DECREF(translation_obj);
 
   PyObject* cols_obj =
-      PyList_New(static_cast<Py_ssize_t>(map.linear_cols.size()));
+      PyList_New(static_cast<Py_ssize_t>(generator.linear_cols.size()));
   if (cols_obj == nullptr) {
-    Py_DECREF(out);
+    Py_DECREF(dict);
     return nullptr;
   }
-  for (Py_ssize_t i = 0; i < static_cast<Py_ssize_t>(map.linear_cols.size());
-       ++i) {
-    PyObject* value = PyLong_FromUnsignedLong(
-        static_cast<unsigned long>(map.linear_cols[static_cast<std::size_t>(i)]));
-    if (value == nullptr) {
+  for (std::size_t i = 0; i < generator.linear_cols.size(); ++i) {
+    PyObject* col_obj = PyLong_FromUnsignedLong(
+        static_cast<unsigned long>(generator.linear_cols[i]));
+    if (col_obj == nullptr) {
       Py_DECREF(cols_obj);
-      Py_DECREF(out);
+      Py_DECREF(dict);
       return nullptr;
     }
-    PyList_SET_ITEM(cols_obj, i, value);
+    PyList_SET_ITEM(cols_obj, static_cast<Py_ssize_t>(i), col_obj);
   }
-  if (PyDict_SetItemString(out, "linear_cols", cols_obj) != 0) {
+  if (PyDict_SetItemString(dict, "linear_cols", cols_obj) != 0) {
     Py_DECREF(cols_obj);
-    Py_DECREF(out);
+    Py_DECREF(dict);
     return nullptr;
   }
   Py_DECREF(cols_obj);
-  return out;
+
+  return dict;
 }
 
-PyObject* AmbientGeneratorListToPyList(const std::vector<AffineMapData>& generators) {
+PyObject* AmbientGeneratorListToPyList(
+    const std::vector<AffineMapData>& generators) {
   PyObject* out = PyList_New(0);
   if (out == nullptr) return nullptr;
-  for (const auto& generator : generators) {
+
+  for (const AffineMapData& generator : generators) {
+    if (generator.IsIdentity()) continue;
     PyObject* gen_dict = AmbientGeneratorToPyDict(generator);
     if (gen_dict == nullptr) {
       Py_DECREF(out);
@@ -352,16 +356,17 @@ PyObject* AmbientGeneratorListToPyList(const std::vector<AffineMapData>& generat
     }
     Py_DECREF(gen_dict);
   }
+
   return out;
 }
 
 PyObject* BuildAutoGroupResult(const GraphData& graph) {
   PyObject* out = PyDict_New();
   if (out == nullptr) return nullptr;
-  const std::vector<groups::Permutation> graph_generators =
+  const std::vector<groups::Permutation>& graph_generators =
       GetAutoGroupGenerators();
-  const std::vector<AffineMapData> ambient_generators =
-      BuildAmbientAutoGenerators(graph, graph_generators);
+  const std::vector<AffineMapData>& affine_generators =
+      GetAffineAutoGenerators();
 
   PyObject* order_obj = PyLong_FromUnsignedLongLong(
       static_cast<unsigned long long>(GetTotalAutoGroup()));
@@ -385,7 +390,7 @@ PyObject* BuildAutoGroupResult(const GraphData& graph) {
   }
   Py_DECREF(complete_obj);
 
-  PyObject* generators_obj = AmbientGeneratorListToPyList(ambient_generators);
+  PyObject* generators_obj = AmbientGeneratorListToPyList(affine_generators);
   if (generators_obj == nullptr) {
     Py_DECREF(out);
     return nullptr;
@@ -413,63 +418,133 @@ PyObject* BuildAutoGroupResult(const GraphData& graph) {
   return out;
 }
 
-bool ParseAmbientGeneratorDict(PyObject* obj, const GraphData& graph,
+bool GraphGeneratorDictToPermutation(PyObject* item, const GraphData& graph,
+                                     groups::Permutation* out) {
+  if (out == nullptr) return false;
+  if (!PyDict_Check(item)) return false;
+
+  groups::GraphPointMap map;
+  PyObject *key = nullptr, *value = nullptr;
+  Py_ssize_t pos = 0;
+  while (PyDict_Next(item, &pos, &key, &value)) {
+    uint32_t x = 0u;
+    uint32_t y = 0u;
+    if (!PyToUInt32(key, &x) || !PyToUInt32(value, &y)) {
+      return false;
+    }
+    map.emplace_back(x, y);
+  }
+
+  const groups::GraphPointIndex index(graph);
+  return groups::GraphPointMapToPermutation(map, index, out);
+}
+
+bool ParseAmbientGeneratorDict(PyObject* item, const GraphData& graph,
                                AffineMapData* out) {
   if (out == nullptr) return false;
-  if (!PyDict_Check(obj)) return false;
+  if (!PyDict_Check(item)) return false;
 
-  PyObject* translation_obj = PyDict_GetItemString(obj, "translation");
-  PyObject* cols_obj = PyDict_GetItemString(obj, "linear_cols");
+  PyObject* translation_obj = PyDict_GetItemString(item, "translation");
+  PyObject* cols_obj = PyDict_GetItemString(item, "linear_cols");
   if (translation_obj == nullptr || cols_obj == nullptr) return false;
 
   uint32_t translation = 0u;
   if (!PyToUInt32(translation_obj, &translation)) {
     PyErr_SetString(PyExc_TypeError,
-                    "ambient generator translation must be a uint32 integer");
+                    "ambient generator translation must be an integer");
     return false;
   }
-  PyObject* seq = PySequence_Fast(
-      cols_obj, "ambient generator linear_cols must be a sequence of uint32");
-  if (seq == nullptr) return false;
-  const Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
-  if (n != graph.d_bits) {
-    Py_DECREF(seq);
+
+  PyObject* cols_seq = PySequence_Fast(
+      cols_obj, "ambient generator linear_cols must be a sequence");
+  if (cols_seq == nullptr) return false;
+
+  const Py_ssize_t n_cols = PySequence_Fast_GET_SIZE(cols_seq);
+  if (n_cols != graph.d_bits) {
+    Py_DECREF(cols_seq);
+    PyErr_SetString(
+        PyExc_ValueError,
+        "ambient generator linear_cols length must equal n_bits + m_bits");
+    return false;
+  }
+
+  if (graph.d_bits <= 0 || graph.d_bits >= 31) {
+    Py_DECREF(cols_seq);
+    PyErr_SetString(PyExc_ValueError, "graph dimension must be in [1, 30]");
+    return false;
+  }
+  const uint32_t ambient_size = (1u << graph.d_bits);
+  if (translation >= ambient_size) {
+    Py_DECREF(cols_seq);
     PyErr_SetString(PyExc_ValueError,
-                    "ambient generator linear_cols length mismatch");
+                    "ambient generator translation is out of range");
     return false;
   }
-  out->dimension_bits = graph.d_bits;
-  out->translation = translation;
-  out->linear_cols.assign(static_cast<std::size_t>(n), 0u);
-  PyObject** items = PySequence_Fast_ITEMS(seq);
-  for (Py_ssize_t i = 0; i < n; ++i) {
-    if (!PyToUInt32(items[i], &out->linear_cols[static_cast<std::size_t>(i)])) {
-      Py_DECREF(seq);
+
+  AffineMapData map;
+  map.dimension_bits = graph.d_bits;
+  map.translation = translation;
+  map.linear_cols.reserve(static_cast<std::size_t>(n_cols));
+
+  PyObject** items = PySequence_Fast_ITEMS(cols_seq);
+  for (Py_ssize_t i = 0; i < n_cols; ++i) {
+    uint32_t col = 0u;
+    if (!PyToUInt32(items[i], &col)) {
+      Py_DECREF(cols_seq);
       PyErr_SetString(PyExc_TypeError,
-                      "ambient generator linear_cols entries must be uint32 integers");
+                      "ambient generator linear_cols entries must be integers");
       return false;
     }
+    if (col >= ambient_size) {
+      Py_DECREF(cols_seq);
+      PyErr_SetString(PyExc_ValueError,
+                      "ambient generator linear_cols entry is out of range");
+      return false;
+    }
+    map.linear_cols.push_back(col);
   }
-  Py_DECREF(seq);
+
+  Py_DECREF(cols_seq);
+  *out = std::move(map);
   return true;
 }
 
-bool AmbientGeneratorToPermutation(const GraphData& graph, const AffineMapData& map,
+bool AmbientGeneratorToPermutation(const GraphData& graph,
+                                   const AffineMapData& map,
                                    groups::Permutation* out) {
   if (out == nullptr) return false;
-  const groups::GraphPointIndex index(graph);
-  std::vector<uint16_t> images(graph.points.size(), 0u);
-  PartialAffineMap A(graph.d_bits);
-  for (std::size_t i = 0; i < graph.points.size(); ++i) {
-    const uint32_t x = graph.points[i];
-    const uint32_t y = map.Apply(x);
-    const auto idx = index.IndexOf(y);
-    if (!idx.has_value()) return false;
-    images[i] = static_cast<uint16_t>(*idx);
-    if (!A.Update(x, y)) return false;
+  if (map.dimension_bits != graph.d_bits) return false;
+  if (map.linear_cols.size() != static_cast<std::size_t>(graph.d_bits)) {
+    return false;
   }
-  if (!A.valid_ccz(graph)) return false;
-  *out = groups::Permutation(std::move(images));
+
+  std::vector<uint32_t> inverse_cols;
+  if (!gf2_linear::InvertLinearColumns(map.linear_cols, graph.d_bits,
+                                       &inverse_cols)) {
+    return false;
+  }
+
+  const std::size_t degree = graph.points.size();
+  if (degree > static_cast<std::size_t>(
+                   std::numeric_limits<uint16_t>::max()) +
+                   1u) {
+    return false;
+  }
+
+  const groups::GraphPointIndex index(graph);
+  std::vector<uint16_t> images(degree, 0u);
+  for (std::size_t i = 0; i < degree; ++i) {
+    const uint32_t image_point = map.Apply(graph.points[i]);
+    const auto image_idx = index.IndexOf(image_point);
+    if (!image_idx.has_value() || *image_idx >= degree) return false;
+    images[i] = static_cast<uint16_t>(*image_idx);
+  }
+
+  try {
+    *out = groups::Permutation(std::move(images));
+  } catch (...) {
+    return false;
+  }
   return true;
 }
 
@@ -493,8 +568,8 @@ bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
   out->clear();
 
   std::vector<groups::Permutation> generators;
-  auto parse_ambient_sequence = [&](PyObject* generators_obj,
-                                    const char* error_context) -> bool {
+  auto parse_generator_sequence = [&](PyObject* generators_obj,
+                                      const char* error_context) -> bool {
     PyObject* seq = PySequence_Fast(generators_obj, error_context);
     if (seq == nullptr) return false;
 
@@ -504,77 +579,41 @@ bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
 
     for (Py_ssize_t i = 0; i < n; ++i) {
       groups::Permutation perm;
-      AffineMapData ambient;
-      if (!ParseAmbientGeneratorDict(items[i], graph, &ambient) ||
-          !AmbientGeneratorToPermutation(graph, ambient, &perm)) {
-        Py_DECREF(seq);
-        PyErr_SetString(PyExc_ValueError,
-                        "auto_group contains invalid ambient generator");
-        return false;
+      const bool has_ambient_marker =
+          PyDict_Check(items[i]) &&
+          (PyDict_GetItemString(items[i], "translation") != nullptr ||
+           PyDict_GetItemString(items[i], "linear_cols") != nullptr);
+      if (has_ambient_marker) {
+        AffineMapData ambient_map;
+        if (!ParseAmbientGeneratorDict(items[i], graph, &ambient_map)) {
+          Py_DECREF(seq);
+          if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_ValueError,
+                            "auto_group contains invalid ambient generator");
+          }
+          return false;
+        }
+        if (!AmbientGeneratorToPermutation(graph, ambient_map, &perm)) {
+          Py_DECREF(seq);
+          PyErr_SetString(
+              PyExc_ValueError,
+              "auto_group contains ambient generator that does not act as a "
+              "graph automorphism");
+          return false;
+        }
+      } else {
+        if (!GraphGeneratorDictToPermutation(items[i], graph, &perm)) {
+          Py_DECREF(seq);
+          PyErr_SetString(PyExc_ValueError,
+                          "auto_group contains invalid graph generator");
+          return false;
+        }
       }
       if (!IsValidGeneratorAuto(graph, perm, require_ea)) {
         Py_DECREF(seq);
         PyErr_SetString(
             PyExc_ValueError,
             "auto_group contains generator that is not a valid automorphism");
-        return false;
-      }
-      if (!perm.IsIdentity()) generators.push_back(std::move(perm));
-    }
-
-    Py_DECREF(seq);
-    return true;
-  };
-
-  auto parse_graph_sequence = [&](PyObject* graph_generators_obj) -> bool {
-    PyObject* seq = PySequence_Fast(
-        graph_generators_obj,
-        "auto_group['graph_generators'] must be a sequence of point-map dicts");
-    if (seq == nullptr) return false;
-
-    const groups::GraphPointIndex index(graph);
-    const Py_ssize_t n = PySequence_Fast_GET_SIZE(seq);
-    PyObject** items = PySequence_Fast_ITEMS(seq);
-    generators.reserve(generators.size() + static_cast<std::size_t>(n));
-
-    for (Py_ssize_t i = 0; i < n; ++i) {
-      PyObject* item = items[i];
-      if (!PyDict_Check(item)) {
-        Py_DECREF(seq);
-        PyErr_SetString(
-            PyExc_ValueError,
-            "auto_group['graph_generators'] contains a non-dict item");
-        return false;
-      }
-
-      groups::GraphPointMap map;
-      PyObject *key = nullptr, *value = nullptr;
-      Py_ssize_t pos = 0;
-      while (PyDict_Next(item, &pos, &key, &value)) {
-        uint32_t x = 0u;
-        uint32_t y = 0u;
-        if (!PyToUInt32(key, &x) || !PyToUInt32(value, &y)) {
-          Py_DECREF(seq);
-          PyErr_SetString(
-              PyExc_ValueError,
-              "auto_group['graph_generators'] contains a non-integer point");
-          return false;
-        }
-        map.emplace_back(x, y);
-      }
-
-      groups::Permutation perm;
-      if (!groups::GraphPointMapToPermutation(map, index, &perm)) {
-        Py_DECREF(seq);
-        PyErr_SetString(PyExc_ValueError,
-                        "auto_group contains invalid graph generator");
-        return false;
-      }
-      if (!IsValidGeneratorAuto(graph, perm, require_ea)) {
-        Py_DECREF(seq);
-        PyErr_SetString(
-            PyExc_ValueError,
-            "auto_group contains graph generator that is not a valid automorphism");
         return false;
       }
       if (!perm.IsIdentity()) generators.push_back(std::move(perm));
@@ -595,17 +634,19 @@ bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
       return false;
     }
     if (generators_obj != nullptr &&
-        !parse_ambient_sequence(
+        !parse_generator_sequence(
             generators_obj,
-            "auto_group['generators'] must be a sequence of ambient generators")) {
+            "auto_group['generators'] must be a sequence of generators")) {
       return false;
     }
     if (graph_generators_obj != nullptr &&
-        !parse_graph_sequence(graph_generators_obj)) {
+        !parse_generator_sequence(
+            graph_generators_obj,
+            "auto_group['graph_generators'] must be a sequence of generators")) {
       return false;
     }
   } else {
-    if (!parse_ambient_sequence(
+    if (!parse_generator_sequence(
             auto_group_obj,
             "auto_group must be a generator list or a dict with "
             "'generators'/'graph_generators'")) {

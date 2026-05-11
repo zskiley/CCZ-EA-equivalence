@@ -600,11 +600,25 @@ def _auto_result_is_complete(auto_result: Optional[dict[str, Any]]) -> bool:
 
 
 def _normalize_auto_result(auto_result: dict[str, Any]) -> dict[str, Any]:
-    graph_generators = auto_result.get("graph_generators")
-    if isinstance(graph_generators, list):
-        normalized_graph_generators: list[dict[int, int]] = []
-        for generator in graph_generators:
+    def _normalize_generator_list(value: Any) -> Any:
+        if not isinstance(value, list):
+            return value
+        normalized_generators: list[dict[Any, Any]] = []
+        for generator in value:
             if not isinstance(generator, dict):
+                continue
+            if "translation" in generator and "linear_cols" in generator:
+                try:
+                    normalized_generators.append(
+                        {
+                            "translation": int(generator["translation"]),
+                            "linear_cols": [
+                                int(v) for v in generator["linear_cols"]
+                            ],
+                        }
+                    )
+                except Exception:
+                    continue
                 continue
             normalized_generator: dict[int, int] = {}
             for k, v in generator.items():
@@ -612,8 +626,13 @@ def _normalize_auto_result(auto_result: dict[str, Any]) -> dict[str, Any]:
                     normalized_generator[int(k)] = int(v)
                 except Exception:
                     continue
-            normalized_graph_generators.append(normalized_generator)
-        auto_result["graph_generators"] = normalized_graph_generators
+            normalized_generators.append(normalized_generator)
+        return normalized_generators
+
+    auto_result["generators"] = _normalize_generator_list(auto_result.get("generators"))
+    auto_result["graph_generators"] = _normalize_generator_list(
+        auto_result.get("graph_generators")
+    )
     return auto_result
 
 

@@ -130,3 +130,43 @@ bool BuildQuadraticTranslationGenerators(
 
   return true;
 }
+
+bool BuildQuadraticTranslationAffineGenerators(
+    const GraphData& F, std::vector<AffineMapData>* generators) {
+  if (generators == nullptr) return false;
+  generators->clear();
+
+  int n_bits = 0;
+  std::vector<uint32_t> f_values;
+  if (!DecodeGraphAsFunction(F, &n_bits, &f_values)) return false;
+  if (!IsQuadraticFunction(f_values, n_bits)) return false;
+
+  const uint32_t q = (1u << n_bits);
+  generators->reserve(static_cast<std::size_t>(n_bits));
+
+  for (int bit = 0; bit < n_bits; ++bit) {
+    const uint32_t a = (1u << bit);
+    const uint32_t d0 = f_values[a] ^ f_values[0u];
+
+    AffineMapData map;
+    map.dimension_bits = F.d_bits;
+    map.translation = a | (d0 << n_bits);
+    map.linear_cols.assign(static_cast<std::size_t>(F.d_bits), 0u);
+
+    for (int x_bit = 0; x_bit < n_bits; ++x_bit) {
+      const uint32_t e = (1u << x_bit);
+      const uint32_t de = f_values[e ^ a] ^ f_values[e];
+      const uint32_t linear_output = de ^ d0;
+      map.linear_cols[static_cast<std::size_t>(x_bit)] =
+          e | (linear_output << n_bits);
+    }
+    for (int y_bit = 0; y_bit < n_bits; ++y_bit) {
+      map.linear_cols[static_cast<std::size_t>(n_bits + y_bit)] =
+          (1u << (n_bits + y_bit));
+    }
+
+    if (!map.IsIdentity()) generators->push_back(std::move(map));
+  }
+
+  return true;
+}

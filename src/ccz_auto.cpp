@@ -56,6 +56,9 @@ std::vector<GraphPointMap> RunCCZAuto(const GraphData& F,
     std::vector<groups::Permutation> translation_generators;
     BuildQuadraticTranslationGenerators(F, &translation_generators);
     AddInitialGroupGenerators(std::move(translation_generators));
+    std::vector<AffineMapData> translation_affine_generators;
+    BuildQuadraticTranslationAffineGenerators(F, &translation_affine_generators);
+    AddInitialAffineGenerators(std::move(translation_affine_generators));
     root_group_state = MakeRootGroupState();
     // After fixing the quadratic anchor in A, orbit pruning must use the
     // subgroup that fixes that anchor, not the full translation subgroup.

@@ -97,7 +97,6 @@ def main() -> int:
     sources = [
         "src/python.cpp",
         "src/algorithms.cpp",
-        "src/ambient_affine.cpp",
         "src/ccz_auto.cpp",
         "src/ea_auto.cpp",
         "src/ccz_equivalence.cpp",
@@ -105,7 +104,9 @@ def main() -> int:
         "src/dfs_equivalence.cpp",
         "src/quadratic.cpp",
         "src/dfs_auto.cpp",
+        "src/ambient_affine.cpp",
         "src/partial_map.cpp",
+        "src/gf2_linear.cpp",
         "src/partition_branch.cpp",
         "src/field_basics.cpp",
         "src/graph.cpp",

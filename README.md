@@ -132,13 +132,15 @@ ccz.ccz_equivalence(
   same meaning as in `ccz.ccz_auto(...)`.
 - `auto_group`: optional precomputed automorphism group seed.
   Accepts either:
-  - a `list[dict]` of ambient affine generators, or
+  - a `list[dict[int, int]]` of graph-point generators,
+  - a `list[{"translation": int, "linear_cols": list[int]}]` of ambient
+    affine generators, or
   - the full auto-result dict from `ccz_auto`/`ea_auto`
-    (uses its `"generators"` field).
+    (uses its `"generators"` and/or `"graph_generators"` fields).
 - `parallel_auto_seed`: enabled by default for equivalence.
   When `auto_group` is not supplied, the wrapper computes automorphism seeds for
   both inputs in parallel, prefers the larger discovered seed on the right-hand
-  side, and if both auto searches finish with different full group orders it
+  side, and if both auto searches finish with different group orders it
   immediately concludes the functions are not equivalent.
 
 ### `ccz.ea_equivalence(...)`
@@ -163,34 +165,19 @@ Parameters are the same as `ccz.ccz_equivalence(...)`.
 Returns a dictionary:
 
 - `order: int`
-  : full ambient affine automorphism-group order found by the algorithm.
+  : automorphism-group order found by the algorithm.
 - `found_entire_group: bool`
   : `True` if search finished before timeout, `False` if timeout was hit.
-- `generators: list[dict]`
-  : ambient affine generators.
+- `generators: list[{"translation": int, "linear_cols": list[int]}]`
+  : ambient affine generators on `F_2^(n+m)`.
 - `graph_generators: list[dict[int, int]]`
-  : graph-point generators that can be fed back into equivalence seeding.
+  : the same discovered generators as permutations of graph points, for
+    equivalence seeding and compatibility.
 
-Each generator has the form:
-
-```python
-{
-    "translation": int,
-    "linear_cols": list[int],
-}
-```
-
-This represents the affine map
-
-`z |-> L(z) + t`
-
-on the ambient space `F_2^{n+m}`, where:
-
-- `translation` is `t`
-- `linear_cols[i]` is the image of basis vector `e_i` under `L`
-
-Each `graph_generators` entry is a dict mapping graph points to graph points
-using the same encoding `p = x | (y << n)`.
+For an ambient affine generator, `translation` is the affine offset and
+`linear_cols[i]` is the image of basis vector `1 << i`. Graph-point generators
+are dicts mapping graph points to graph points using the encoding
+`p = x | (y << n)`.
 
 ### `ccz_equivalence(...)` / `ea_equivalence(...)`
 
@@ -204,7 +191,9 @@ Returns either:
 
 You may pass:
 
-- a `list[dict]` of ambient affine generators, or
+- a `list[dict[int, int]]` of graph-point generators,
+- a `list[{"translation": int, "linear_cols": list[int]}]` of ambient affine
+  generators, or
 - the full auto result dict from `ccz_auto`/`ea_auto` (it will use the
   available `"graph_generators"` and/or `"generators"` fields).
 
@@ -220,7 +209,7 @@ When enabled, the wrapper:
 - swaps the equivalence direction when the left input yields the larger seed so
   that larger seed is used on the right-hand side,
 - and returns `None` immediately if both complete auto searches finish and the
-  resulting full group orders differ.
+  resulting group orders differ.
 
 If the wrapper swaps the search direction, it inverts the returned point map
 before returning it to the caller.

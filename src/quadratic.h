@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "groups/perm.h"
+#include "partial_map.h"
 
 struct GraphData;
 
@@ -12,5 +13,8 @@ bool TryQuadraticAnchorPoint(const GraphData& F, uint32_t* anchor_point);
 
 bool BuildQuadraticTranslationGenerators(
     const GraphData& F, std::vector<groups::Permutation>* generators);
+
+bool BuildQuadraticTranslationAffineGenerators(
+    const GraphData& F, std::vector<AffineMapData>* generators);
 
 #endif
