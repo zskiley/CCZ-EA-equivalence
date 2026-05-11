@@ -1,46 +1,111 @@
-# ccz
+# CCZ/EA Equivalence
 
-CCZ/EA automorphism and equivalence algorithms with Python bindings.
+Algorithms for CCZ and EA automorphism groups and equivalence of vectorial
+Boolean functions.
 
-## Install directly from GitHub
+The public Python API is Sage-first: automorphism groups are returned as Sage
+matrix groups, and equivalences are returned as Sage matrices over `GF(2)`.
+
+## Build
+
+From a source checkout:
 
 ```bash
-pip install "git+https://github.com/zskiley/CCZ-EA-equivalence.git"
+sage -python python/build.py
 ```
 
-If you install from a specific branch/tag:
+For development without Sage, the native extension can also be built with a
+regular Python interpreter:
 
 ```bash
-pip install "git+https://github.com/zskiley/CCZ-EA-equivalence.git@main"
+python python/build.py
 ```
 
-## Quick usage
+The public `ccz_auto`, `ea_auto`, `ccz_equivalence`, and `ea_equivalence`
+functions require Sage at runtime because they return Sage objects.
 
-Supported Python inputs:
-- truth tables (`list[int]` / sequence of integers)
-- `galois.Poly`
-- Sage polynomials
+## Function Inputs
 
-Automorphism functions return Sage matrix groups, so run them in Sage or with
-`sage -python`.
+The preferred input format is an explicit tuple:
 
-### 1) Automorphism group in Sage
+```python
+F = (f, n, m)
+```
+
+where `f` is the function, `n` is the input dimension, and `m` is the output
+dimension. This represents a function
+
+```text
+F : F_2^n -> F_2^m
+```
+
+The function `f` may be:
+
+- a truth table, as a sequence of `2^n` non-negative integers,
+- a Sage polynomial/callable over a binary field,
+- a `galois.Poly`.
+
+Bare function inputs are also accepted for convenience:
+
+```python
+ccz.ccz_auto(f)
+```
+
+For bare inputs, the wrapper infers `n` and assumes `m = n`. Use `(f, n, m)`
+for rectangular functions.
+
+Truth-table values are encoded as integers. The graph point for `x` is encoded
+internally as:
+
+```text
+p = x | (f[x] << n)
+```
+
+## Automorphism Groups
+
+```python
+G, complete = ccz.ccz_auto(F, time_limit=None, min_active_hyperplanes=None)
+G, complete = ccz.ea_auto(F, time_limit=None, min_active_hyperplanes=None)
+```
+
+`G` is a Sage `MatrixGroup` over `GF(2)`. It acts on homogeneous ambient
+vectors of length `n + m + 1`.
+
+Each affine generator
+
+```text
+z -> L z + t
+```
+
+is represented as the homogeneous matrix
+
+```text
+[ L  t ]
+[ 0  1 ]
+```
+
+`complete` is `True` if the automorphism search finished before the timeout.
+If `complete` is `False`, `G` is only the subgroup found before timeout.
+
+Example:
 
 ```python
 import ccz
 from sage.all import GF, PolynomialRing
 
-n = 9
+n = 8
 K = GF(2**n, name="a")
 R = PolynomialRing(K, "x")
 x = R.gen()
 
-G, complete = ccz.ccz_auto(x**3)
+G, complete = ccz.ccz_auto((x**3, n, n), time_limit=20)
 
-print(G.order(), complete)
+print(G.order())
+print(complete)
+print(G.gens())
 ```
 
-For rectangular functions, pass the explicit function tuple `(f, n, m)`:
+Rectangular truth-table example:
 
 ```python
 import ccz
@@ -48,156 +113,134 @@ import ccz
 f = [0, 1, 2, 3, 0, 1, 2, 3]  # F_2^3 -> F_2^2
 
 G, complete = ccz.ea_auto((f, 3, 2))
-
-print(G.order(), complete)
 ```
 
-### 2) Equivalence
+## Equivalence
+
+```python
+T = ccz.ccz_equivalence(
+    F,
+    H,
+    parallel=True,
+    left_auto=True,
+    right_auto=True,
+    time_limit=None,
+    min_active_hyperplanes=None,
+    verbose=True,
+)
+
+T = ccz.ea_equivalence(
+    F,
+    H,
+    parallel=True,
+    left_auto=True,
+    right_auto=True,
+    time_limit=None,
+    min_active_hyperplanes=None,
+    verbose=True,
+)
+```
+
+The return value is either:
+
+- `None`, if no equivalence is found, or
+- a Sage matrix over `GF(2)` representing one affine equivalence as a
+  homogeneous matrix.
+
+Example:
 
 ```python
 import ccz
 
-f_tt = [0, 1, 2, 3, 4, 5, 6, 7]
-g_tt = [0, 1, 2, 3, 4, 5, 6, 7]
+f = [0, 1, 2, 3, 4, 5, 6, 7]
+g = [0, 1, 2, 3, 4, 5, 6, 7]
 
-eq = ccz.ccz_equivalence(f_tt, g_tt)
+T = ccz.ccz_equivalence((f, 3, 3), (g, 3, 3))
 
-print(eq is not None)
+if T is not None:
+    print("Equivalent")
+    print(T)
 ```
 
-## Recommendations
-If the goal is to prove that two functions are equivalent, setting
-`time_limit_seconds` to a low value can be useful. If the goal is to prove
-inequivalence, the automorphism group is often essential.
+## Parallel Equivalence Behavior
 
-## Available API
+By default, equivalence starts three searches in parallel:
 
-### `ccz.ccz_auto(...)`
+- an unseeded equivalence search,
+- the left automorphism group search,
+- the right automorphism group search.
+
+As automorphism groups finish, the wrapper starts additional seeded equivalence
+searches. If the complete left and right automorphism groups finish with
+different orders, the wrapper returns `None`.
+
+The auto-search switches can be booleans or precomputed groups:
 
 ```python
-ccz.ccz_auto(
-    function_input,
-    time_limit=None,
-    min_active_hyperplanes=None,
-)
+left = True        # compute the left auto group
+right = False      # skip the right auto group
+right = G          # use a supplied Sage MatrixGroup
+right = (G, True)  # use the tuple returned by ccz_auto / ea_auto
 ```
 
-- `function_input`: either `(f, n, m)` or a bare truth table / polynomial.
-  Bare inputs infer `n` and use `m = n`.
-- `time_limit`: optional auto-search timeout in seconds.
-- `min_active_hyperplanes`: optional refinement budget override.
-- returns `(G, complete)`, where `G` is a Sage `MatrixGroup` over `GF(2)`
-  acting on homogeneous vectors of length `n + m + 1`, and `complete` reports
-  whether the search finished before timeout.
-
-### `ccz.ea_auto(...)`
+Examples:
 
 ```python
-ccz.ea_auto(
-    function_input,
-    time_limit=None,
-    min_active_hyperplanes=None,
-)
+# Run only the equivalence search.
+T = ccz.ccz_equivalence(F, H, left_auto=False, right_auto=False)
+
+# Precompute and reuse an automorphism group.
+AutH, complete = ccz.ccz_auto(H)
+T = ccz.ccz_equivalence(F, H, right_auto=AutH)
+
+# Disable subprocess orchestration.
+T = ccz.ccz_equivalence(F, H, parallel=False)
 ```
 
-Parameters are the same as `ccz.ccz_auto(...)`.
+## Parameters
 
-### `ccz.ccz_equivalence(...)`
+### `time_limit`
+
+`time_limit` is measured in seconds and currently applies to automorphism
+searches. `None` means no auto-search timeout.
+
+The native equivalence DFS is not yet time-limited.
+
+### `min_active_hyperplanes`
+
+Advanced refinement parameter. Leave it as `None` unless benchmarking or
+debugging the search.
+
+### `verbose`
+
+When `True`, the equivalence wrapper prints progress for started/finished
+parallel tasks. Set `verbose=False` for quiet library use.
+
+## Public API
 
 ```python
+ccz.ccz_auto(F, time_limit=None, min_active_hyperplanes=None)
+ccz.ea_auto(F, time_limit=None, min_active_hyperplanes=None)
+
 ccz.ccz_equivalence(
-    f_values_or_fn,
-    g_values_or_fn,
-    time_limit_seconds=None,
+    F,
+    H,
+    parallel=True,
+    left_auto=True,
+    right_auto=True,
+    time_limit=None,
     min_active_hyperplanes=None,
-    auto_group=None,
-    parallel_auto_seed=True,
+    verbose=True,
 )
-```
 
-- `f_values_or_fn`, `g_values_or_fn`: truth tables, `galois.Poly`, or Sage
-  polynomials.
-- dimensions are inferred automatically from truth-table length or polynomial
-  field degree.
-- `time_limit_seconds`, `min_active_hyperplanes`:
-  same meaning as in `ccz.ccz_auto(...)`.
-- `auto_group`: optional precomputed automorphism group seed.
-  Accepts either:
-  - a Sage `MatrixGroup` returned by `ccz_auto`/`ea_auto`,
-  - the `(G, complete)` tuple returned by `ccz_auto`/`ea_auto`,
-  - a `list[dict[int, int]]` of graph-point generators,
-  - a `list[{"translation": int, "linear_cols": list[int]}]` of ambient
-    affine generators, or
-  - a raw auto-result dict from the native binding.
-- `parallel_auto_seed`: enabled by default for equivalence.
-  When `auto_group` is not supplied, the wrapper computes automorphism seeds for
-  both inputs in parallel, prefers the larger discovered seed on the right-hand
-  side, and if both auto searches finish with different group orders it
-  immediately concludes the functions are not equivalent.
-
-### `ccz.ea_equivalence(...)`
-
-```python
 ccz.ea_equivalence(
-    f_values_or_fn,
-    g_values_or_fn,
-    time_limit_seconds=None,
+    F,
+    H,
+    parallel=True,
+    left_auto=True,
+    right_auto=True,
+    time_limit=None,
     min_active_hyperplanes=None,
-    auto_group=None,
-    parallel_auto_seed=True,
+    verbose=True,
 )
 ```
-
-Parameters are the same as `ccz.ccz_equivalence(...)`.
-
-## Return formats
-
-### `ccz_auto(...)` / `ea_auto(...)`
-
-Returns `(G, complete)`.
-
-- `G`: Sage `MatrixGroup` over `GF(2)`.
-- `complete`: `True` if search finished before timeout, `False` if timeout was
-  hit.
-
-Affine maps `z -> Lz + t` are represented as homogeneous matrices:
-
-```text
-[ L  t ]
-[ 0  1 ]
-```
-
-### `ccz_equivalence(...)` / `ea_equivalence(...)`
-
-Returns either:
-
-- `None` (no equivalence found), or
-- `dict[int, int]` mapping graph points from `F` to graph points in `G`
-  using the same encoding `p = x | (y << n)`.
-
-### Optional `auto_group=` input format for equivalence
-
-You may pass:
-
-- a `list[dict[int, int]]` of graph-point generators,
-- a `list[{"translation": int, "linear_cols": list[int]}]` of ambient affine
-  generators, or
-- a Sage `MatrixGroup`, or the `(G, complete)` tuple returned by
-  `ccz_auto`/`ea_auto`.
-
-If `auto_group` is provided, it is used directly and the default parallel
-auto-seeding heuristic is skipped.
-
-### Default `parallel_auto_seed=True` heuristic for equivalence
-
-When enabled, the wrapper:
-
-- computes auto seeds for both inputs in separate Python subprocesses,
-- compares the discovered group orders,
-- swaps the equivalence direction when the left input yields the larger seed so
-  that larger seed is used on the right-hand side,
-- and returns `None` immediately if both complete auto searches finish and the
-  resulting group orders differ.
-
-If the wrapper swaps the search direction, it inverts the returned point map
-before returning it to the caller.

@@ -163,25 +163,25 @@ def main() -> int:
     if args.mode in ("all", "ccz_equivalence"):
         eq = run_and_time(
             "ccz_equivalence",
-            lambda: ccz.ccz_equivalence(
-                tt_f, tt_g, time_limit_seconds=args.time_limit
-            ),
+            lambda: ccz._raw_ccz_equivalence(  # pylint: disable=protected-access
+                tt_f, tt_g, time_limit=args.time_limit
+            )[0],
         )
         print(f"ccz_equivalence: {'YES' if eq is not None else 'NO'}")
         if eq is not None:
-            print(f"map size: {len(eq)}")
+            print(f"affine dimension: {len(eq['linear_cols'])}")
         print("")
 
     if args.mode in ("all", "ea_equivalence"):
         eq = run_and_time(
             "ea_equivalence",
-            lambda: ccz.ea_equivalence(
-                tt_f, tt_g, time_limit_seconds=args.time_limit
-            ),
+            lambda: ccz._raw_ea_equivalence(  # pylint: disable=protected-access
+                tt_f, tt_g, time_limit=args.time_limit
+            )[0],
         )
         print(f"ea_equivalence: {'YES' if eq is not None else 'NO'}")
         if eq is not None:
-            print(f"map size: {len(eq)}")
+            print(f"affine dimension: {len(eq['linear_cols'])}")
         print("")
 
     return 0

@@ -436,6 +436,44 @@ def _normalize_function_input(function_input: Any) -> tuple[list[int], int, int]
     return _to_truth_table(function_input, n, n, field=inferred_field), n, n
 
 
+def _normalize_function_with_dimensions(
+    function_input: Any, n_bits: int, m_bits: int
+) -> tuple[list[int], int, int]:
+    if isinstance(function_input, tuple) and len(function_input) == 3:
+        return _normalize_function_input(function_input)
+
+    _validate_supported_input(function_input, "function_input")
+    field = _field_from_callable(function_input)
+    if _is_galois_poly(function_input):
+        field = function_input.field
+    return _to_truth_table(function_input, n_bits, m_bits, field=field), n_bits, m_bits
+
+
+def _normalize_function_pair(
+    left_input: Any, right_input: Any
+) -> tuple[list[int], list[int], int, int]:
+    left_is_explicit = isinstance(left_input, tuple) and len(left_input) == 3
+    right_is_explicit = isinstance(right_input, tuple) and len(right_input) == 3
+
+    if left_is_explicit:
+        left_tt, n, m = _normalize_function_input(left_input)
+        right_tt, right_n, right_m = _normalize_function_with_dimensions(
+            right_input, n, m
+        )
+    elif right_is_explicit:
+        right_tt, n, m = _normalize_function_input(right_input)
+        left_tt, right_n, right_m = _normalize_function_with_dimensions(
+            left_input, n, m
+        )
+    else:
+        left_tt, n, m = _normalize_function_input(left_input)
+        right_tt, right_n, right_m = _normalize_function_input(right_input)
+
+    if (right_n, right_m) != (n, m):
+        raise ValueError("function inputs must have the same n and m dimensions")
+    return left_tt, right_tt, n, m
+
+
 def _resolve_time_limit(
     time_limit: Optional[float],
     kwargs: dict[str, Any],
@@ -453,6 +491,20 @@ def _resolve_time_limit(
     if time_limit is None:
         return None
     return float(time_limit)
+
+
+def _resolve_equivalence_legacy_kwargs(
+    kwargs: dict[str, Any],
+    time_limit: Optional[float],
+    parallel: bool,
+    right_auto: Any,
+) -> tuple[Optional[float], bool, Any]:
+    if "parallel_auto_seed" in kwargs:
+        parallel = bool(kwargs.pop("parallel_auto_seed"))
+    if "auto_group" in kwargs:
+        right_auto = kwargs.pop("auto_group")
+    time_limit = _resolve_time_limit(time_limit, kwargs)
+    return time_limit, parallel, right_auto
 
 
 def _raw_ccz_auto(
@@ -475,169 +527,170 @@ def _raw_ea_auto(
     return result, n, m
 
 
-def _equivalence_auto_seed_time_limit_seconds_arg(
-    time_limit_seconds: Optional[float],
-) -> Optional[float]:
-    if time_limit_seconds is None:
-        return None
-    return float(time_limit_seconds)
+def _raw_ccz_equivalence(
+    left_input: Any,
+    right_input: Any,
+    time_limit: Optional[float] = None,
+    min_active_hyperplanes: Optional[int] = None,
+    auto_group: Any = None,
+) -> tuple[Optional[dict[str, Any]], int, int]:
+    left_tt, right_tt, n, m = _normalize_function_pair(left_input, right_input)
+    core_auto_group = [] if auto_group is None else _auto_group_for_core(auto_group, n, m)
+    result = _core.ccz_equivalence(
+        left_tt,
+        right_tt,
+        n,
+        m,
+        time_limit,
+        min_active_hyperplanes,
+        core_auto_group,
+    )
+    return result, n, m
+
+
+def _raw_ea_equivalence(
+    left_input: Any,
+    right_input: Any,
+    time_limit: Optional[float] = None,
+    min_active_hyperplanes: Optional[int] = None,
+    auto_group: Any = None,
+) -> tuple[Optional[dict[str, Any]], int, int]:
+    left_tt, right_tt, n, m = _normalize_function_pair(left_input, right_input)
+    core_auto_group = [] if auto_group is None else _auto_group_for_core(auto_group, n, m)
+    result = _core.ea_equivalence(
+        left_tt,
+        right_tt,
+        n,
+        m,
+        time_limit,
+        min_active_hyperplanes,
+        core_auto_group,
+    )
+    return result, n, m
 
 
 def _auto_worker_script_path() -> Path:
     return _HERE / "auto_worker.py"
 
 
-def _parallel_auto_worker_affinities() -> list[Optional[list[int]]]:
-    sched_getaffinity = getattr(os, "sched_getaffinity", None)
-    if sched_getaffinity is None:
-        return [None, None]
-
-    try:
-        allowed_cores = sorted(int(core) for core in sched_getaffinity(0))
-    except Exception:
-        return [None, None]
-
-    if len(allowed_cores) < 2:
-        return [None, None]
-
-    return [[allowed_cores[0]], [allowed_cores[1]]]
-
-
-def _compute_pair_autos_in_parallel(
-    mode: str,
-    f_tt: list[int],
-    g_tt: list[int],
-    n_bits: int,
-    m_bits: int,
-    time_limit_seconds: Optional[float],
-    min_active_hyperplanes: Optional[int],
-) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
-    worker_script = _auto_worker_script_path()
-    if not worker_script.is_file():
-        return None, None
-
-    auto_time_limit_seconds = _equivalence_auto_seed_time_limit_seconds_arg(
-        time_limit_seconds
+def _start_worker_task(
+    name: str,
+    payload: dict[str, Any],
+    *,
+    task_type: str,
+    swapped: bool = False,
+) -> dict[str, Any]:
+    stdout_fd, stdout_path_str = tempfile.mkstemp(
+        prefix="ccz-worker-", suffix=".stdout"
     )
-    stop_on_first_success = auto_time_limit_seconds is None
-    worker_affinities = _parallel_auto_worker_affinities()
-    payloads = [
-        {
-            "mode": mode,
-            "truth_table": f_tt,
-            "n_bits": n_bits,
-            "m_bits": m_bits,
-            "time_limit_seconds": auto_time_limit_seconds,
-            "min_active_hyperplanes": min_active_hyperplanes,
-            "cpu_affinity": worker_affinities[0],
-        },
-        {
-            "mode": mode,
-            "truth_table": g_tt,
-            "n_bits": n_bits,
-            "m_bits": m_bits,
-            "time_limit_seconds": auto_time_limit_seconds,
-            "min_active_hyperplanes": min_active_hyperplanes,
-            "cpu_affinity": worker_affinities[1],
-        },
-    ]
-    processes: list[subprocess.Popen[str]] = []
-    worker_output_paths: list[tuple[Path, Path]] = []
+    stderr_fd, stderr_path_str = tempfile.mkstemp(
+        prefix="ccz-worker-", suffix=".stderr"
+    )
+    os.close(stdout_fd)
+    os.close(stderr_fd)
+    stdout_path = Path(stdout_path_str)
+    stderr_path = Path(stderr_path_str)
 
-    for _ in payloads:
-        stdout_fd, stdout_path_str = tempfile.mkstemp(
-            prefix="ccz-auto-worker-", suffix=".stdout"
+    with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open(
+        "w", encoding="utf-8"
+    ) as stderr_file:
+        proc = subprocess.Popen(
+            [sys.executable, str(_auto_worker_script_path())],
+            cwd=str(_HERE.parent),
+            stdin=subprocess.PIPE,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            text=True,
         )
-        stderr_fd, stderr_path_str = tempfile.mkstemp(
-            prefix="ccz-auto-worker-", suffix=".stderr"
-        )
-        os.close(stdout_fd)
-        os.close(stderr_fd)
-        stdout_path = Path(stdout_path_str)
-        stderr_path = Path(stderr_path_str)
-        worker_output_paths.append((stdout_path, stderr_path))
-        with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open(
-            "w", encoding="utf-8"
-        ) as stderr_file:
-            proc = subprocess.Popen(
-                [sys.executable, str(worker_script)],
-                cwd=str(_HERE.parent),
-                stdin=subprocess.PIPE,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                text=True,
-            )
-        processes.append(proc)
 
-    for proc, payload in zip(processes, payloads):
-        if proc.stdin is None:
-            continue
+    if proc.stdin is not None:
         proc.stdin.write(json.dumps(payload))
         proc.stdin.close()
 
-    def _read_worker_result(
-        proc: subprocess.Popen[str], stdout_path: Path
-    ) -> Optional[dict[str, Any]]:
-        proc.wait()
-        if proc.returncode != 0:
-            return None
+    return {
+        "name": name,
+        "type": task_type,
+        "swapped": swapped,
+        "proc": proc,
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+    }
+
+
+def _stop_worker_task(task: dict[str, Any]) -> None:
+    proc = task["proc"]
+    if proc.poll() is None:
+        proc.terminate()
         try:
-            response = json.loads(stdout_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-        if not isinstance(response, dict) or not response.get("ok"):
-            return None
-        result = response.get("result")
-        if not isinstance(result, dict):
-            return None
-        result = _normalize_auto_result(result)
-        if "generators" not in result or "order" not in result:
-            return None
-        return result
+            proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
-    def _stop_worker(proc: subprocess.Popen[str]) -> None:
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=2.0)
-            except subprocess.TimeoutExpired:
-                proc.kill()
 
-    results: list[Optional[dict[str, Any]]] = [None, None]
+def _cleanup_worker_task(task: dict[str, Any]) -> None:
+    for key in ("stdout_path", "stderr_path"):
+        try:
+            task[key].unlink()
+        except (FileNotFoundError, PermissionError):
+            pass
+
+
+def _read_worker_task(task: dict[str, Any]) -> tuple[bool, Any]:
+    proc = task["proc"]
+    proc.wait()
     try:
-        if stop_on_first_success:
-            pending = set(range(len(processes)))
-            while pending:
-                finished_any = False
-                for idx in list(pending):
-                    proc = processes[idx]
-                    if proc.poll() is None:
-                        continue
-                    pending.remove(idx)
-                    finished_any = True
-                    result = _read_worker_result(proc, worker_output_paths[idx][0])
-                    results[idx] = result
-                    if result is not None:
-                        for other_idx in pending:
-                            _stop_worker(processes[other_idx])
-                        return results[0], results[1]
-                if not finished_any:
-                    time.sleep(0.05)
-            return results[0], results[1]
+        response = json.loads(task["stdout_path"].read_text(encoding="utf-8"))
+    except Exception as exc:
+        return False, {
+            "error_type": type(exc).__name__,
+            "error_message": "worker produced invalid JSON",
+        }
+    if proc.returncode != 0:
+        return False, response
+    if not isinstance(response, dict) or not response.get("ok"):
+        return False, response
+    return True, response.get("result")
 
-        for idx, proc in enumerate(processes):
-            results[idx] = _read_worker_result(proc, worker_output_paths[idx][0])
 
-        return results[0], results[1]
-    finally:
-        for proc in processes:
-            _stop_worker(proc)
-        for stdout_path, stderr_path in worker_output_paths:
-            for path in (stdout_path, stderr_path):
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
+def _auto_worker_payload(
+    mode: str,
+    truth_table: list[int],
+    n_bits: int,
+    m_bits: int,
+    time_limit: Optional[float],
+    min_active_hyperplanes: Optional[int],
+) -> dict[str, Any]:
+    return {
+        "mode": mode,
+        "truth_table": truth_table,
+        "n_bits": n_bits,
+        "m_bits": m_bits,
+        "time_limit_seconds": time_limit,
+        "min_active_hyperplanes": min_active_hyperplanes,
+    }
+
+
+def _equivalence_worker_payload(
+    mode: str,
+    left_tt: list[int],
+    right_tt: list[int],
+    n_bits: int,
+    m_bits: int,
+    time_limit: Optional[float],
+    min_active_hyperplanes: Optional[int],
+    auto_group: Any,
+) -> dict[str, Any]:
+    return {
+        "mode": f"{mode}_equivalence",
+        "truth_table_f": left_tt,
+        "truth_table_g": right_tt,
+        "n_bits": n_bits,
+        "m_bits": m_bits,
+        "time_limit_seconds": time_limit,
+        "min_active_hyperplanes": min_active_hyperplanes,
+        "auto_group": auto_group,
+    }
 
 
 def _auto_result_order(auto_result: Optional[dict[str, Any]]) -> Optional[int]:
@@ -702,12 +755,6 @@ def _auto_result_has_usable_seed(auto_result: Optional[dict[str, Any]]) -> bool:
     return isinstance(graph_generators, list) and len(graph_generators) > 0
 
 
-def _invert_equivalence_point_map(point_map: Optional[dict[int, int]]):
-    if point_map is None:
-        return None
-    return {int(v): int(k) for k, v in point_map.items()}
-
-
 def _matrix_entry_bit(value: Any) -> int:
     return int(value) & 1
 
@@ -756,40 +803,13 @@ def _auto_group_for_core(auto_group: Any, n_bits: int, m_bits: int) -> Any:
     return auto_group
 
 
-def _print_python_auto_seed_status(
-    auto_result: dict[str, Any],
-    time_limit_seconds: Optional[float],
-    start_label: str,
-) -> None:
-    found_entire_group = _auto_result_is_complete(auto_result)
-    order = _auto_result_order(auto_result)
-    if order is None:
-        return
-    if found_entire_group:
-        print("(Found entire auto group)", flush=True)
-    else:
-        print("(potentially incoplete auto group)", flush=True)
-    print(f"Auto group size before equivalence search: {order}", flush=True)
-    if not found_entire_group and not _auto_result_has_usable_seed(auto_result):
-        limit_text = (
-            "until one auto search finishes"
-            if time_limit_seconds is None
-            else str(time_limit_seconds)
-        )
-        print(
-            "Consider increasing the time limit for the automorphism "
-            f"search, time_limit_seconds = {limit_text}",
-            flush=True,
-        )
-    print(f"{start_label}{order}", flush=True)
-
-
 def _sage_constructors():
     try:
         from sage.all import GF, MatrixGroup, identity_matrix, matrix
     except Exception as exc:  # pragma: no cover
         raise ImportError(
-            "ccz_auto and ea_auto now return Sage MatrixGroup objects. "
+            "ccz_auto, ea_auto, ccz_equivalence, and ea_equivalence now "
+            "return Sage matrix objects. "
             "Run them with Sage Python, for example `sage -python`, or from "
             "inside Sage."
         ) from exc
@@ -841,6 +861,343 @@ def _auto_result_to_sage_group(
     return MatrixGroup(generators)
 
 
+def _affine_result_to_sage_matrix(
+    affine_result: Optional[dict[str, Any]],
+    n_bits: int,
+    m_bits: int,
+    sage_constructors: tuple[Any, Any, Any, Any],
+    *,
+    invert: bool = False,
+):
+    if affine_result is None:
+        return None
+    GF, _MatrixGroup, _identity_matrix, matrix_ctor = sage_constructors
+    matrix_obj = _affine_generator_to_sage_matrix(
+        affine_result, n_bits + m_bits, GF(2), matrix_ctor
+    )
+    if invert:
+        matrix_obj = matrix_obj.inverse()
+    return matrix_obj
+
+
+def _core_equivalence(
+    mode: str,
+    left_tt: list[int],
+    right_tt: list[int],
+    n_bits: int,
+    m_bits: int,
+    time_limit: Optional[float],
+    min_active_hyperplanes: Optional[int],
+    auto_group: Any,
+):
+    fn = _core.ccz_equivalence if mode == "ccz" else _core.ea_equivalence
+    return fn(
+        left_tt,
+        right_tt,
+        n_bits,
+        m_bits,
+        time_limit,
+        min_active_hyperplanes,
+        [] if auto_group is None else auto_group,
+    )
+
+
+def _core_auto(mode: str, truth_table: list[int], n_bits: int, m_bits: int,
+               time_limit: Optional[float],
+               min_active_hyperplanes: Optional[int]) -> dict[str, Any]:
+    fn = _core.ccz_auto if mode == "ccz" else _core.ea_auto
+    return fn(truth_table, n_bits, m_bits, time_limit, min_active_hyperplanes)
+
+
+def _supplied_auto_seed_and_info(auto_option: Any, n_bits: int, m_bits: int):
+    if isinstance(auto_option, bool):
+        return None, None
+
+    candidate = auto_option
+    complete = True
+    if isinstance(candidate, tuple) and len(candidate) == 2:
+        candidate, complete = candidate
+
+    seed = _auto_group_for_core(candidate, n_bits, m_bits)
+    order: Optional[int] = None
+    if isinstance(candidate, dict):
+        order = _auto_result_order(candidate)
+        complete = _auto_result_is_complete(candidate)
+    elif hasattr(candidate, "order"):
+        try:
+            order = int(candidate.order())
+        except Exception:
+            order = None
+    return seed, {"order": order, "complete": bool(complete)}
+
+
+def _print_verbose(verbose: bool, message: str) -> None:
+    if verbose:
+        print(message, flush=True)
+
+
+def _run_sequential_equivalence(
+    mode: str,
+    left_tt: list[int],
+    right_tt: list[int],
+    n_bits: int,
+    m_bits: int,
+    time_limit: Optional[float],
+    min_active_hyperplanes: Optional[int],
+    left_auto: Any,
+    right_auto: Any,
+    verbose: bool,
+    sage_constructors: tuple[Any, Any, Any, Any],
+):
+    left_seed, left_info = _supplied_auto_seed_and_info(left_auto, n_bits, m_bits)
+    right_seed, right_info = _supplied_auto_seed_and_info(right_auto, n_bits, m_bits)
+
+    if left_auto is True:
+        _print_verbose(verbose, "Computing left automorphism group")
+        left_result = _core_auto(
+            mode, left_tt, n_bits, m_bits, time_limit, min_active_hyperplanes
+        )
+        left_seed = left_result
+        left_info = {
+            "order": _auto_result_order(left_result),
+            "complete": _auto_result_is_complete(left_result),
+        }
+    if right_auto is True:
+        _print_verbose(verbose, "Computing right automorphism group")
+        right_result = _core_auto(
+            mode, right_tt, n_bits, m_bits, time_limit, min_active_hyperplanes
+        )
+        right_seed = right_result
+        right_info = {
+            "order": _auto_result_order(right_result),
+            "complete": _auto_result_is_complete(right_result),
+        }
+
+    if (
+        left_info is not None
+        and right_info is not None
+        and left_info.get("complete")
+        and right_info.get("complete")
+        and left_info.get("order") is not None
+        and right_info.get("order") is not None
+        and left_info["order"] != right_info["order"]
+    ):
+        _print_verbose(verbose, "Complete auto groups have different orders")
+        return None
+
+    use_left = False
+    seed = right_seed
+    if right_seed is None and left_seed is not None:
+        use_left = True
+        seed = left_seed
+    elif right_seed is not None and left_seed is not None:
+        left_order = left_info.get("order") if left_info else None
+        right_order = right_info.get("order") if right_info else None
+        if left_order is not None and right_order is not None and left_order > right_order:
+            use_left = True
+            seed = left_seed
+
+    if use_left:
+        _print_verbose(verbose, "Running equivalence search with left auto seed")
+        affine = _core_equivalence(
+            mode,
+            right_tt,
+            left_tt,
+            n_bits,
+            m_bits,
+            time_limit,
+            min_active_hyperplanes,
+            seed,
+        )
+        return _affine_result_to_sage_matrix(
+            affine, n_bits, m_bits, sage_constructors, invert=True
+        )
+
+    _print_verbose(verbose, "Running equivalence search")
+    affine = _core_equivalence(
+        mode,
+        left_tt,
+        right_tt,
+        n_bits,
+        m_bits,
+        time_limit,
+        min_active_hyperplanes,
+        seed,
+    )
+    return _affine_result_to_sage_matrix(affine, n_bits, m_bits, sage_constructors)
+
+
+def _run_parallel_equivalence(
+    mode: str,
+    left_tt: list[int],
+    right_tt: list[int],
+    n_bits: int,
+    m_bits: int,
+    time_limit: Optional[float],
+    min_active_hyperplanes: Optional[int],
+    left_auto: Any,
+    right_auto: Any,
+    verbose: bool,
+    sage_constructors: tuple[Any, Any, Any, Any],
+):
+    if not _auto_worker_script_path().is_file():
+        return _run_sequential_equivalence(
+            mode,
+            left_tt,
+            right_tt,
+            n_bits,
+            m_bits,
+            time_limit,
+            min_active_hyperplanes,
+            left_auto,
+            right_auto,
+            verbose,
+            sage_constructors,
+        )
+
+    tasks: list[dict[str, Any]] = []
+    left_seed, left_info = _supplied_auto_seed_and_info(left_auto, n_bits, m_bits)
+    right_seed, right_info = _supplied_auto_seed_and_info(right_auto, n_bits, m_bits)
+
+    def launch_equivalence(name: str, seed: Any, swapped: bool = False) -> None:
+        l_tt, r_tt = (right_tt, left_tt) if swapped else (left_tt, right_tt)
+        tasks.append(
+            _start_worker_task(
+                name,
+                _equivalence_worker_payload(
+                    mode,
+                    l_tt,
+                    r_tt,
+                    n_bits,
+                    m_bits,
+                    time_limit,
+                    min_active_hyperplanes,
+                    seed,
+                ),
+                task_type="equivalence",
+                swapped=swapped,
+            )
+        )
+        _print_verbose(verbose, f"Started {name}")
+
+    launch_equivalence("equivalence", right_seed)
+    if left_seed is not None:
+        launch_equivalence("left-seeded equivalence", left_seed, swapped=True)
+
+    if left_auto is True:
+        tasks.append(
+            _start_worker_task(
+                "left auto",
+                _auto_worker_payload(
+                    mode,
+                    left_tt,
+                    n_bits,
+                    m_bits,
+                    time_limit,
+                    min_active_hyperplanes,
+                ),
+                task_type="auto_left",
+            )
+        )
+        _print_verbose(verbose, "Started left auto")
+    if right_auto is True:
+        tasks.append(
+            _start_worker_task(
+                "right auto",
+                _auto_worker_payload(
+                    mode,
+                    right_tt,
+                    n_bits,
+                    m_bits,
+                    time_limit,
+                    min_active_hyperplanes,
+                ),
+                task_type="auto_right",
+            )
+        )
+        _print_verbose(verbose, "Started right auto")
+
+    try:
+        while tasks:
+            finished = [task for task in tasks if task["proc"].poll() is not None]
+            if not finished:
+                time.sleep(0.05)
+                continue
+
+            for task in finished:
+                tasks.remove(task)
+                ok, result = _read_worker_task(task)
+                _cleanup_worker_task(task)
+                if not ok:
+                    _print_verbose(
+                        verbose,
+                        f"{task['name']} failed: {result.get('error_message', result)}",
+                    )
+                    continue
+
+                if task["type"] == "equivalence":
+                    _print_verbose(verbose, f"{task['name']} finished")
+                    matrix_obj = _affine_result_to_sage_matrix(
+                        result,
+                        n_bits,
+                        m_bits,
+                        sage_constructors,
+                        invert=bool(task["swapped"]),
+                    )
+                    for remaining in tasks:
+                        _stop_worker_task(remaining)
+                        _cleanup_worker_task(remaining)
+                    return matrix_obj
+
+                if task["type"] == "auto_left":
+                    left_info = {
+                        "order": _auto_result_order(result),
+                        "complete": _auto_result_is_complete(result),
+                    }
+                    _print_verbose(
+                        verbose,
+                        f"Left auto finished with order {left_info['order']}",
+                    )
+                    if _auto_result_has_usable_seed(result):
+                        launch_equivalence(
+                            "left-seeded equivalence", result, swapped=True
+                        )
+                elif task["type"] == "auto_right":
+                    right_info = {
+                        "order": _auto_result_order(result),
+                        "complete": _auto_result_is_complete(result),
+                    }
+                    _print_verbose(
+                        verbose,
+                        f"Right auto finished with order {right_info['order']}",
+                    )
+                    if _auto_result_has_usable_seed(result):
+                        launch_equivalence("right-seeded equivalence", result)
+
+                if (
+                    left_info is not None
+                    and right_info is not None
+                    and left_info.get("complete")
+                    and right_info.get("complete")
+                    and left_info.get("order") is not None
+                    and right_info.get("order") is not None
+                    and left_info["order"] != right_info["order"]
+                ):
+                    _print_verbose(
+                        verbose, "Complete auto groups have different orders"
+                    )
+                    for remaining in tasks:
+                        _stop_worker_task(remaining)
+                        _cleanup_worker_task(remaining)
+                    return None
+    finally:
+        for task in tasks:
+            _stop_worker_task(task)
+            _cleanup_worker_task(task)
+
+    return None
+
+
 def ccz_auto(
     function_input: Any,
     time_limit: Optional[float] = None,
@@ -872,158 +1229,94 @@ def ea_auto(
 
 
 def ccz_equivalence(
-    f_values_or_fn: Iterable[int] | Any,
-    g_values_or_fn: Iterable[int] | Any,
-    time_limit_seconds: Optional[float] = None,
+    left_input: Any,
+    right_input: Any,
+    *,
+    parallel: bool = True,
+    left_auto: Any = True,
+    right_auto: Any = True,
+    time_limit: Optional[float] = None,
     min_active_hyperplanes: Optional[int] = None,
-    auto_group: Any = None,
-    parallel_auto_seed: bool = True,
+    verbose: bool = True,
+    **kwargs: Any,
 ):
-    n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
-        f_values_or_fn, g_values_or_fn, None, None, None
+    time_limit, parallel, right_auto = _resolve_equivalence_legacy_kwargs(
+        kwargs, time_limit, parallel, right_auto
     )
-    f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_inferred_field)
-    g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_inferred_field)
-
-    if parallel_auto_seed and auto_group is None:
-        f_auto, g_auto = _compute_pair_autos_in_parallel(
+    sage_constructors = _sage_constructors()
+    left_tt, right_tt, n, m = _normalize_function_pair(left_input, right_input)
+    if parallel:
+        return _run_parallel_equivalence(
             "ccz",
-            f_tt,
-            g_tt,
+            left_tt,
+            right_tt,
             n,
             m,
-            time_limit_seconds,
+            time_limit,
             min_active_hyperplanes,
+            left_auto,
+            right_auto,
+            verbose,
+            sage_constructors,
         )
-        f_order = _auto_result_order(f_auto)
-        g_order = _auto_result_order(g_auto)
-
-        if (
-            _auto_result_is_complete(f_auto)
-            and _auto_result_is_complete(g_auto)
-            and f_order is not None
-            and g_order is not None
-            and f_order != g_order
-        ):
-            return None
-
-        if f_auto is not None and (
-            g_auto is None
-            or (f_order is not None and g_order is not None and f_order > g_order)
-        ):
-            selected_auto_group = f_auto if _auto_result_has_usable_seed(f_auto) else None
-            if selected_auto_group is not None:
-                _print_python_auto_seed_status(
-                    f_auto,
-                    time_limit_seconds,
-                    "Starting equivalence search with auto group size: ",
-                )
-            swapped = _core.ccz_equivalence(
-                g_tt,
-                f_tt,
-                n,
-                m,
-                time_limit_seconds,
-                min_active_hyperplanes,
-                selected_auto_group,
-            )
-            return _invert_equivalence_point_map(swapped)
-
-        if _auto_result_has_usable_seed(g_auto):
-            auto_group = g_auto
-            _print_python_auto_seed_status(
-                g_auto,
-                time_limit_seconds,
-                "Starting equivalence search with auto group size: ",
-            )
-
-    core_auto_group = _auto_group_for_core(auto_group, n, m)
-    return _core.ccz_equivalence(
-        f_tt,
-        g_tt,
+    return _run_sequential_equivalence(
+        "ccz",
+        left_tt,
+        right_tt,
         n,
         m,
-        time_limit_seconds,
+        time_limit,
         min_active_hyperplanes,
-        core_auto_group,
+        left_auto,
+        right_auto,
+        verbose,
+        sage_constructors,
     )
 
 
 def ea_equivalence(
-    f_values_or_fn: Iterable[int] | Any,
-    g_values_or_fn: Iterable[int] | Any,
-    time_limit_seconds: Optional[float] = None,
+    left_input: Any,
+    right_input: Any,
+    *,
+    parallel: bool = True,
+    left_auto: Any = True,
+    right_auto: Any = True,
+    time_limit: Optional[float] = None,
     min_active_hyperplanes: Optional[int] = None,
-    auto_group: Any = None,
-    parallel_auto_seed: bool = True,
+    verbose: bool = True,
+    **kwargs: Any,
 ):
-    n, m, f_inferred_field, g_inferred_field = _resolve_bits_pair(
-        f_values_or_fn, g_values_or_fn, None, None, None
+    time_limit, parallel, right_auto = _resolve_equivalence_legacy_kwargs(
+        kwargs, time_limit, parallel, right_auto
     )
-    f_tt = _to_truth_table(f_values_or_fn, n, m, field=f_inferred_field)
-    g_tt = _to_truth_table(g_values_or_fn, n, m, field=g_inferred_field)
-
-    if parallel_auto_seed and auto_group is None:
-        f_auto, g_auto = _compute_pair_autos_in_parallel(
+    sage_constructors = _sage_constructors()
+    left_tt, right_tt, n, m = _normalize_function_pair(left_input, right_input)
+    if parallel:
+        return _run_parallel_equivalence(
             "ea",
-            f_tt,
-            g_tt,
+            left_tt,
+            right_tt,
             n,
             m,
-            time_limit_seconds,
+            time_limit,
             min_active_hyperplanes,
+            left_auto,
+            right_auto,
+            verbose,
+            sage_constructors,
         )
-        f_order = _auto_result_order(f_auto)
-        g_order = _auto_result_order(g_auto)
-
-        if (
-            _auto_result_is_complete(f_auto)
-            and _auto_result_is_complete(g_auto)
-            and f_order is not None
-            and g_order is not None
-            and f_order != g_order
-        ):
-            return None
-
-        if f_auto is not None and (
-            g_auto is None
-            or (f_order is not None and g_order is not None and f_order > g_order)
-        ):
-            selected_auto_group = f_auto if _auto_result_has_usable_seed(f_auto) else None
-            if selected_auto_group is not None:
-                _print_python_auto_seed_status(
-                    f_auto,
-                    time_limit_seconds,
-                    "Starting EA equivalence search with auto group size: ",
-                )
-            swapped = _core.ea_equivalence(
-                g_tt,
-                f_tt,
-                n,
-                m,
-                time_limit_seconds,
-                min_active_hyperplanes,
-                selected_auto_group,
-            )
-            return _invert_equivalence_point_map(swapped)
-
-        if _auto_result_has_usable_seed(g_auto):
-            auto_group = g_auto
-            _print_python_auto_seed_status(
-                g_auto,
-                time_limit_seconds,
-                "Starting EA equivalence search with auto group size: ",
-            )
-
-    core_auto_group = _auto_group_for_core(auto_group, n, m)
-    return _core.ea_equivalence(
-        f_tt,
-        g_tt,
+    return _run_sequential_equivalence(
+        "ea",
+        left_tt,
+        right_tt,
         n,
         m,
-        time_limit_seconds,
+        time_limit,
         min_active_hyperplanes,
-        core_auto_group,
+        left_auto,
+        right_auto,
+        verbose,
+        sage_constructors,
     )
 
 

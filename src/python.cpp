@@ -560,6 +560,21 @@ bool IsValidGeneratorAuto(const GraphData& graph, const groups::Permutation& g,
   return require_ea ? A.valid_ea(graph) : A.valid_ccz(graph);
 }
 
+bool EquivalencePointMapToAffineMap(const EquivalencePointMap& point_map,
+                                    const GraphData& graph,
+                                    bool require_ea,
+                                    AffineMapData* out) {
+  if (out == nullptr) return false;
+  PartialAffineMap A(graph.d_bits);
+  for (const auto& kv : point_map) {
+    if (!A.Update(kv.first, kv.second)) return false;
+  }
+  if (require_ea) {
+    return A.ExtractRepresentativeAffineMap(out, graph.n_bits, graph.m_bits);
+  }
+  return A.ExtractRepresentativeAffineMap(out);
+}
+
 bool ParseProvidedAutoGroupGenerators(PyObject* auto_group_obj,
                                       const GraphData& graph,
                                       bool require_ea,
@@ -805,7 +820,14 @@ PyObject* PyCCZEquivalence(PyObject*, PyObject* args, PyObject* kwargs) {
                                        min_active_hyperplanes);
     }
     if (!eq.has_value()) Py_RETURN_NONE;
-    return PointMapToPyDict(*eq);
+    AffineMapData affine_map;
+    if (!EquivalencePointMapToAffineMap(*eq, F, /*require_ea=*/false,
+                                        &affine_map)) {
+      PyErr_SetString(PyExc_RuntimeError,
+                      "failed to extract affine equivalence map");
+      return nullptr;
+    }
+    return AmbientGeneratorToPyDict(affine_map);
   } catch (const std::exception& e) {
     PyErr_SetString(PyExc_RuntimeError, e.what());
     return nullptr;
@@ -870,7 +892,14 @@ PyObject* PyEAEquivalence(PyObject*, PyObject* args, PyObject* kwargs) {
                                       min_active_hyperplanes);
     }
     if (!eq.has_value()) Py_RETURN_NONE;
-    return PointMapToPyDict(*eq);
+    AffineMapData affine_map;
+    if (!EquivalencePointMapToAffineMap(*eq, F, /*require_ea=*/true,
+                                        &affine_map)) {
+      PyErr_SetString(PyExc_RuntimeError,
+                      "failed to extract affine equivalence map");
+      return nullptr;
+    }
+    return AmbientGeneratorToPyDict(affine_map);
   } catch (const std::exception& e) {
     PyErr_SetString(PyExc_RuntimeError, e.what());
     return nullptr;
@@ -889,10 +918,10 @@ PyMethodDef kMethods[] = {
      "ea_auto(truth_table, n_bits, m_bits=None, time_limit_seconds=None, min_active_hyperplanes=None) -> dict"},
     {"ccz_equivalence", reinterpret_cast<PyCFunction>(PyCCZEquivalence),
      METH_VARARGS | METH_KEYWORDS,
-     "ccz_equivalence(truth_table_f, truth_table_g, n_bits, m_bits=None, time_limit_seconds=None, min_active_hyperplanes=None, auto_group=None) -> dict[int,int] | None"},
+     "ccz_equivalence(truth_table_f, truth_table_g, n_bits, m_bits=None, time_limit_seconds=None, min_active_hyperplanes=None, auto_group=None) -> affine dict | None"},
     {"ea_equivalence", reinterpret_cast<PyCFunction>(PyEAEquivalence),
      METH_VARARGS | METH_KEYWORDS,
-     "ea_equivalence(truth_table_f, truth_table_g, n_bits, m_bits=None, time_limit_seconds=None, min_active_hyperplanes=None, auto_group=None) -> dict[int,int] | None"},
+     "ea_equivalence(truth_table_f, truth_table_g, n_bits, m_bits=None, time_limit_seconds=None, min_active_hyperplanes=None, auto_group=None) -> affine dict | None"},
     {nullptr, nullptr, 0, nullptr}};
 
 PyModuleDef kModuleDef = {

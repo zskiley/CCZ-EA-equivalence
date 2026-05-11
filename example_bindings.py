@@ -61,14 +61,14 @@ def main() -> None:
         res1 = _timed(
             "galois.ccz_equivalence (poly)",
             lambda: ccz.ccz_equivalence(
-                f_ff, g_ff, time_limit_seconds=2.0, auto_group=auto_group_ccz
+                f_ff, g_ff, time_limit=2.0, right_auto=auto_group_ccz
             ),
         )
         print(res1)
         res2 = _timed(
             "galois.ea_equivalence (poly)",
             lambda: ccz.ea_equivalence(
-                f_ff, g_ff, time_limit_seconds=2.0, auto_group=auto_group_ea
+                f_ff, g_ff, time_limit=2.0, right_auto=auto_group_ea
             ),
         )
         print(res2)
