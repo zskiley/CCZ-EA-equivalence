@@ -129,8 +129,6 @@ T = ccz.ccz_equivalence(
     F,
     H,
     parallel=True,
-    left_auto=True,
-    right_auto=True,
     time_limit=None,
     min_active_hyperplanes=None,
     verbose=True,
@@ -140,8 +138,6 @@ T = ccz.ea_equivalence(
     F,
     H,
     parallel=True,
-    left_auto=True,
-    right_auto=True,
     time_limit=None,
     min_active_hyperplanes=None,
     verbose=True,
@@ -163,9 +159,10 @@ The return value is either:
 
 ## Parallel Equivalence Behavior
 
-By default, equivalence starts three searches in parallel:
+With `parallel=True` and no supplied automorphism group, equivalence starts
+three searches in parallel:
 
-- an unseeded equivalence search,
+- an equivalence search,
 - the left automorphism group search,
 - the right automorphism group search.
 
@@ -174,22 +171,22 @@ finishes first, the wrapper stops the auto searches and returns that result. If
 one of the auto searches finishes first, the wrapper stops the other running
 tasks and starts one new equivalence search seeded by the finished auto group.
 
-The auto-search switches can be booleans or precomputed groups:
+If `left_auto` or `right_auto` is a supplied group, the wrapper skips the
+parallel race and runs one seeded equivalence search.
+
+With `parallel=False`, the auto-search switches control the sequential path:
 
 ```python
-left = True        # compute the left auto group
-right = False      # skip the right auto group
-right = G          # use a supplied Sage MatrixGroup
+left_auto = False  # do not compute/use the left auto group
+right_auto = True  # compute the right auto group
+right_auto = G     # use a supplied Sage MatrixGroup
 ```
-
-When `left_auto` or `right_auto` is a supplied group, the wrapper uses it as a
-seed and does not start automorphism searches for that equivalence call.
 
 Examples:
 
 ```python
 # Run only the equivalence search.
-T = ccz.ccz_equivalence(F, H, left_auto=False, right_auto=False)
+T = ccz.ccz_equivalence(F, H, parallel=False, right_auto=False)
 
 # Disable subprocess orchestration.
 T = ccz.ccz_equivalence(F, H, parallel=False)
@@ -224,7 +221,7 @@ ccz.ccz_equivalence(
     F,
     H,
     parallel=True,
-    left_auto=True,
+    left_auto=False,
     right_auto=True,
     time_limit=None,
     min_active_hyperplanes=None,
@@ -235,7 +232,7 @@ ccz.ea_equivalence(
     F,
     H,
     parallel=True,
-    left_auto=True,
+    left_auto=False,
     right_auto=True,
     time_limit=None,
     min_active_hyperplanes=None,

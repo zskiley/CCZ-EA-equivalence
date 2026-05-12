@@ -37,11 +37,14 @@ Automorphism functions require Sage and return:
 homogeneous matrices, and `complete` reports whether the auto search finished
 before timeout. `G` can be passed back into
 `ccz.ccz_equivalence(..., right_auto=...)` or
-`ccz.ea_equivalence(..., right_auto=...)`; supplied groups are used as seeds
-without starting new automorphism searches for that equivalence call.
+`ccz.ea_equivalence(..., right_auto=...)`.
 
 Equivalence functions require Sage and return either `None` or a Sage matrix
-over `GF(2)` representing an affine equivalence. By default, equivalence races
-left auto, right auto, and an unseeded equivalence search in parallel. If an
-auto search finishes first, the other running tasks are stopped and one seeded
-equivalence search is started with that auto group.
+over `GF(2)` representing an affine equivalence. With `parallel=True` and no
+supplied automorphism group, equivalence races left auto, right auto, and an
+equivalence search in parallel. If an auto search finishes first, the other
+running tasks are stopped and one seeded equivalence search is started with that
+auto group.
+
+If `left_auto` or `right_auto` is a supplied group, the wrapper skips the
+parallel race and runs one seeded equivalence search.

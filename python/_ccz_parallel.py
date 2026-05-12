@@ -190,6 +190,14 @@ def _run_parallel_equivalence(
     verbose: bool,
     sage_constructors: tuple[Any, Any, Any, Any],
 ):
+    if _seed(left_auto, n_bits, m_bits) is not None or _seed(
+        right_auto, n_bits, m_bits
+    ) is not None:
+        return _run_sequential_equivalence(
+            mode, left_tt, right_tt, n_bits, m_bits, time_limit,
+            min_active_hyperplanes, left_auto, right_auto, verbose, sage_constructors,
+        )
+
     if not _WORKER.is_file():
         return _run_sequential_equivalence(
             mode, left_tt, right_tt, n_bits, m_bits, time_limit,
@@ -209,25 +217,26 @@ def _run_parallel_equivalence(
         _print(verbose, f"Started {name}")
 
     right_seed = _seed(right_auto, n_bits, m_bits)
-    add_equiv("equivalence", right_seed)
     left_seed = _seed(left_auto, n_bits, m_bits)
-    if left_seed is not None:
+    if right_seed is not None:
+        add_equiv("right-seeded equivalence", right_seed)
+    elif left_seed is not None:
         add_equiv("left-seeded equivalence", left_seed, True)
-    explicit_seed = right_seed is not None or left_seed is not None
-    if left_auto is True and not explicit_seed:
-        tasks.append(_spawn(
-            "left auto", "auto_left",
-            _auto_payload(mode, left_tt, n_bits, m_bits, time_limit,
-                          min_active_hyperplanes),
-        ))
-        _print(verbose, "Started left auto")
-    if right_auto is True and not explicit_seed:
-        tasks.append(_spawn(
-            "right auto", "auto_right",
-            _auto_payload(mode, right_tt, n_bits, m_bits, time_limit,
-                          min_active_hyperplanes),
-        ))
-        _print(verbose, "Started right auto")
+    else:
+        add_equiv("equivalence", None)
+
+    tasks.append(_spawn(
+        "left auto", "auto_left",
+        _auto_payload(mode, left_tt, n_bits, m_bits, time_limit,
+                      min_active_hyperplanes),
+    ))
+    _print(verbose, "Started left auto")
+    tasks.append(_spawn(
+        "right auto", "auto_right",
+        _auto_payload(mode, right_tt, n_bits, m_bits, time_limit,
+                      min_active_hyperplanes),
+    ))
+    _print(verbose, "Started right auto")
 
     try:
         while tasks:
