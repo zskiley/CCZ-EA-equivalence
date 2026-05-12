@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -9,6 +12,10 @@ from pathlib import Path
 
 def _is_compiler_available(cxx: str) -> bool:
     return shutil.which(cxx) is not None or Path(cxx).is_file()
+
+
+def _compiler_command(value: str) -> list[str]:
+    return shlex.split(value)
 
 
 def _windows_compiler_candidates() -> list[str]:
@@ -34,10 +41,13 @@ def _windows_compiler_candidates() -> list[str]:
     return candidates
 
 
-def _resolve_cxx() -> str | None:
+def _resolve_cxx() -> list[str] | None:
     env_cxx = os.environ.get("CXX")
     if env_cxx:
-        return env_cxx if _is_compiler_available(env_cxx) else None
+        command = _compiler_command(env_cxx)
+        if command and _is_compiler_available(command[0]):
+            return command
+        return None
 
     candidates = (
         _windows_compiler_candidates()
@@ -46,7 +56,7 @@ def _resolve_cxx() -> str | None:
     )
     for cxx in candidates:
         if _is_compiler_available(cxx):
-            return cxx
+            return [cxx]
     return None
 
 
@@ -124,8 +134,7 @@ def main() -> int:
     ]
     source_paths = [str(repo_root / s) for s in sources]
 
-    cmd = [
-        cxx,
+    cmd = cxx + [
         "-std=c++17",
         "-O3",
         "-DNDEBUG",
@@ -141,6 +150,20 @@ def main() -> int:
         cmd.extend(["-static-libgcc", "-static-libstdc++"])
 
     cmd.extend(source_paths)
+    if sys.platform == "cygwin":
+        lib_dir = sysconfig.get_config_var("LIBDIR")
+        ld_library = sysconfig.get_config_var("LDLIBRARY") or ""
+        if lib_dir:
+            cmd.append(f"-L{lib_dir}")
+        if ld_library.startswith("lib"):
+            library_name = ld_library[3:]
+            for suffix in (".dll.a", ".a", ".so", ".dylib"):
+                if library_name.endswith(suffix):
+                    library_name = library_name[: -len(suffix)]
+                    break
+            if library_name:
+                cmd.append(f"-l{library_name}")
+        cmd.extend(shlex.split(sysconfig.get_config_var("LIBS") or ""))
     if os.name == "nt":
         pyver = f"{sys.version_info.major}{sys.version_info.minor}"
         libs_dir = Path(sys.base_prefix) / "libs"
