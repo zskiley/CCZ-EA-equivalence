@@ -89,7 +89,7 @@ def _core_equivalence(
     right_tt: list[int],
     n_bits: int,
     m_bits: int,
-    time_limit: Optional[float],
+    time_limit_auto_search: Optional[float],
     min_active_hyperplanes: Optional[int],
     auto_group: Any,
 ):
@@ -99,7 +99,7 @@ def _core_equivalence(
         right_tt,
         n_bits,
         m_bits,
-        time_limit,
+        time_limit_auto_search,
         min_active_hyperplanes,
         [] if auto_group is None else auto_group,
     )
@@ -110,8 +110,10 @@ def _core_auto(
     truth_table: list[int],
     n_bits: int,
     m_bits: int,
-    time_limit: Optional[float],
+    time_limit_auto_search: Optional[float],
     min_active_hyperplanes: Optional[int],
 ) -> dict[str, Any]:
     fn = _core.ccz_auto if mode == "ccz" else _core.ea_auto
-    return fn(truth_table, n_bits, m_bits, time_limit, min_active_hyperplanes)
+    return fn(
+        truth_table, n_bits, m_bits, time_limit_auto_search, min_active_hyperplanes
+    )

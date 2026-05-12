@@ -19,11 +19,13 @@ def main() -> int:
     truth_table_g = payload.get("truth_table_g")
     n_bits = int(payload["n_bits"])
     m_bits = int(payload["m_bits"])
-    raw_time_limit_seconds = payload.get("time_limit_seconds")
-    if raw_time_limit_seconds is None:
-        time_limit_seconds = None
+    raw_time_limit_auto_search = payload.get("time_limit_auto_search")
+    if raw_time_limit_auto_search is None:
+        raw_time_limit_auto_search = payload.get("time_limit_seconds")
+    if raw_time_limit_auto_search is None:
+        time_limit_auto_search = None
     else:
-        time_limit_seconds = float(raw_time_limit_seconds)
+        time_limit_auto_search = float(raw_time_limit_auto_search)
     min_active_hyperplanes = payload["min_active_hyperplanes"]
     cpu_affinity = payload.get("cpu_affinity")
     auto_group = payload.get("auto_group")
@@ -41,7 +43,7 @@ def main() -> int:
                 truth_table,
                 n_bits,
                 m_bits,
-                time_limit_seconds,
+                time_limit_auto_search,
                 min_active_hyperplanes,
             )
         elif mode == "ccz_equivalence":
@@ -51,7 +53,7 @@ def main() -> int:
                 truth_table_g,
                 n_bits,
                 m_bits,
-                time_limit_seconds,
+                None,
                 min_active_hyperplanes,
                 [] if auto_group is None else auto_group,
             )
@@ -61,7 +63,7 @@ def main() -> int:
                 truth_table,
                 n_bits,
                 m_bits,
-                time_limit_seconds,
+                time_limit_auto_search,
                 min_active_hyperplanes,
             )
         elif mode == "ea_equivalence":
@@ -71,7 +73,7 @@ def main() -> int:
                 truth_table_g,
                 n_bits,
                 m_bits,
-                time_limit_seconds,
+                None,
                 min_active_hyperplanes,
                 [] if auto_group is None else auto_group,
             )

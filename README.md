@@ -89,8 +89,12 @@ p = x | (f[x] << n)
 ## Automorphism Groups
 
 ```python
-G, complete = ccz.ccz_auto(F, time_limit=None, min_active_hyperplanes=None)
-G, complete = ccz.ea_auto(F, time_limit=None, min_active_hyperplanes=None)
+G, complete = ccz.ccz_auto(
+    F, time_limit_auto_search=None, min_active_hyperplanes=None
+)
+G, complete = ccz.ea_auto(
+    F, time_limit_auto_search=None, min_active_hyperplanes=None
+)
 ```
 
 `G` is a Sage `MatrixGroup` over `GF(2)`. It acts on homogeneous ambient
@@ -129,7 +133,7 @@ T = ccz.ccz_equivalence(
     F,
     H,
     parallel=True,
-    time_limit=None,
+    time_limit_auto_search=None,
     min_active_hyperplanes=None,
     verbose=True,
 )
@@ -138,7 +142,7 @@ T = ccz.ea_equivalence(
     F,
     H,
     parallel=True,
-    time_limit=None,
+    time_limit_auto_search=None,
     min_active_hyperplanes=None,
     verbose=True,
 )
@@ -172,7 +176,8 @@ one of the auto searches finishes first, the wrapper stops the other running
 tasks and starts one new equivalence search seeded by the finished auto group.
 
 If `left_auto` or `right_auto` is a supplied group, the wrapper skips the
-parallel race and runs one seeded equivalence search.
+parallel race and runs one seeded equivalence search. If both supplied groups
+are available, the larger-order group is used as the seed.
 
 With `parallel=False`, the auto-search switches control the sequential path:
 
@@ -194,12 +199,27 @@ T = ccz.ccz_equivalence(F, H, parallel=False)
 
 ## Parameters
 
-### `time_limit`
+### `time_limit_auto_search`
 
-`time_limit` is measured in seconds and currently applies to automorphism
-searches. `None` means no auto-search timeout.
+`time_limit_auto_search` is measured in seconds and applies only to
+automorphism searches. `None` means no auto-search timeout.
 
 The native equivalence DFS is not yet time-limited.
+
+In `ccz_auto(...)` and `ea_auto(...)`, it limits that one auto search.
+
+In `ccz_equivalence(...)` and `ea_equivalence(...)`, it limits only auto
+searches started by the wrapper:
+
+- with `parallel=True` and no supplied group, it is used by the left and right
+  auto worker processes;
+- with `parallel=False`, it is used only if `left_auto=True` or
+  `right_auto=True`;
+- with a supplied `left_auto` or `right_auto` group, no auto search is run, so
+  this parameter has no effect.
+
+The old names `time_limit` and `time_limit_seconds` are still accepted as
+compatibility aliases.
 
 ### `min_active_hyperplanes`
 
@@ -214,8 +234,8 @@ parallel tasks. Set `verbose=False` for quiet library use.
 ## Public API
 
 ```python
-ccz.ccz_auto(F, time_limit=None, min_active_hyperplanes=None)
-ccz.ea_auto(F, time_limit=None, min_active_hyperplanes=None)
+ccz.ccz_auto(F, time_limit_auto_search=None, min_active_hyperplanes=None)
+ccz.ea_auto(F, time_limit_auto_search=None, min_active_hyperplanes=None)
 
 ccz.ccz_equivalence(
     F,
@@ -223,7 +243,7 @@ ccz.ccz_equivalence(
     parallel=True,
     left_auto=False,
     right_auto=True,
-    time_limit=None,
+    time_limit_auto_search=None,
     min_active_hyperplanes=None,
     verbose=True,
 )
@@ -234,7 +254,7 @@ ccz.ea_equivalence(
     parallel=True,
     left_auto=False,
     right_auto=True,
-    time_limit=None,
+    time_limit_auto_search=None,
     min_active_hyperplanes=None,
     verbose=True,
 )

@@ -47,4 +47,11 @@ running tasks are stopped and one seeded equivalence search is started with that
 auto group.
 
 If `left_auto` or `right_auto` is a supplied group, the wrapper skips the
-parallel race and runs one seeded equivalence search.
+parallel race and runs one seeded equivalence search. If both supplied groups
+are available, the larger-order group is used as the seed.
+
+`time_limit_auto_search` is measured in seconds and only limits automorphism
+searches. It does not kill the equivalence search itself. If a supplied auto
+group is passed with `left_auto=` or `right_auto=`, no auto search is run, so
+the timeout has no effect for that call. The old names `time_limit` and
+`time_limit_seconds` are still accepted as aliases.
