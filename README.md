@@ -40,6 +40,7 @@ print(complete)
 T = ccz.ccz_equivalence(f, g, right_auto=AutG)
 print(T is not None)
 ```
+Note that there is some overhead when passing in the group like this, construction the sage MatrixGroup for example. It is usually more efficent to just let the equivalence algorithm compute it, unless one of the functions stays constant between tests. It is of course also possible to use the c++ code directly without sage. 
 
 ## Function Inputs
 
