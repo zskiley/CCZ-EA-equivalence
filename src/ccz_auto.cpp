@@ -9,23 +9,24 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <numeric>
 #include <vector>
 
-std::vector<GraphPointMap> RunCCZAuto(const GraphData& F,
-                                      std::size_t min_active_hyperplanes,
-                                      double time_limit_seconds) {
+std::vector<GraphPointMap> RunAuto(const GraphData& F, bool ea_mode,
+                                   std::size_t min_active_hyperplanes,
+                                   double time_limit_seconds) {
   ResetAutoSearch();
   SetAutoSearchTimeLimitSeconds(time_limit_seconds);
-  SetUseEaValidation(false);
+  SetUseEaValidation(ea_mode);
+
+  const std::size_t point_count = F.points.size();
   if (min_active_hyperplanes == 0) {
-    min_active_hyperplanes =
-        static_cast<std::size_t>(2u) * static_cast<std::size_t>(F.points.size());
+    min_active_hyperplanes = static_cast<std::size_t>(2u) * point_count;
   }
 
   // Points are tracked as dense indices into F.points to keep label arrays small.
-  std::vector<uint32_t> point_indices;
-  point_indices.reserve(F.points.size());
-  for (uint32_t i = 0; i < F.points.size(); ++i) point_indices.push_back(i);
+  std::vector<uint32_t> point_indices(point_count, 0u);
+  std::iota(point_indices.begin(), point_indices.end(), 0u);
   OrderedPartition points_left(point_indices);
   OrderedPartition points_right(point_indices);
 
@@ -76,4 +77,11 @@ std::vector<GraphPointMap> RunCCZAuto(const GraphData& F,
                std::move(hyperplanes_right), min_active_hyperplanes,
                std::move(root_group_state));
   return GetFoundAutos();
+}
+
+std::vector<GraphPointMap> RunCCZAuto(const GraphData& F,
+                                      std::size_t min_active_hyperplanes,
+                                      double time_limit_seconds) {
+  return RunAuto(F, /*ea_mode=*/false, min_active_hyperplanes,
+                 time_limit_seconds);
 }
