@@ -4,7 +4,20 @@ from __future__ import annotations
 import argparse
 import time
 
-import ccz
+try:
+    from ._ccz_core import (
+        _raw_ccz_auto,
+        _raw_ccz_equivalence,
+        _raw_ea_auto,
+        _raw_ea_equivalence,
+    )
+except ImportError:  # pragma: no cover - direct script execution
+    from _ccz_core import (
+        _raw_ccz_auto,
+        _raw_ccz_equivalence,
+        _raw_ea_auto,
+        _raw_ea_equivalence,
+    )
 
 
 def poly_degree(p: int) -> int:
@@ -138,32 +151,32 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"building truth tables for n={args.n}, d1={args.d1}, d2={args.d2}")
-    tt_f = run_and_time("Build F truth table", lambda: power_truth_table(args.n, args.d1))
-    tt_g = run_and_time("Build G truth table", lambda: power_truth_table(args.n, args.d2))
+    tt_f = run_and_time(
+        "Build F truth table", lambda: power_truth_table(args.n, args.d1)
+    )
+    tt_g = run_and_time(
+        "Build G truth table", lambda: power_truth_table(args.n, args.d2)
+    )
     print("")
 
     if args.mode in ("all", "ccz_auto"):
         auto = run_and_time(
             "ccz_auto",
-            lambda: ccz._raw_ccz_auto(  # pylint: disable=protected-access
-                tt_f, time_limit=args.time_limit
-            )[0],
+            lambda: _raw_ccz_auto(tt_f, time_limit=args.time_limit)[0],
         )
         print(f"ccz_auto order: {auto['order']}\n")
 
     if args.mode in ("all", "ea_auto"):
         auto = run_and_time(
             "ea_auto",
-            lambda: ccz._raw_ea_auto(  # pylint: disable=protected-access
-                tt_f, time_limit=args.time_limit
-            )[0],
+            lambda: _raw_ea_auto(tt_f, time_limit=args.time_limit)[0],
         )
         print(f"ea_auto order: {auto['order']}\n")
 
     if args.mode in ("all", "ccz_equivalence"):
         eq = run_and_time(
             "ccz_equivalence",
-            lambda: ccz._raw_ccz_equivalence(  # pylint: disable=protected-access
+            lambda: _raw_ccz_equivalence(
                 tt_f, tt_g, time_limit=args.time_limit
             )[0],
         )
@@ -175,7 +188,7 @@ def main() -> int:
     if args.mode in ("all", "ea_equivalence"):
         eq = run_and_time(
             "ea_equivalence",
-            lambda: ccz._raw_ea_equivalence(  # pylint: disable=protected-access
+            lambda: _raw_ea_equivalence(
                 tt_f, tt_g, time_limit=args.time_limit
             )[0],
         )

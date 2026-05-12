@@ -5,7 +5,10 @@ import json
 import os
 import sys
 
-import ccz
+try:
+    from ._ccz_core import _core_auto, _core_equivalence
+except ImportError:  # pragma: no cover - direct script execution
+    from _ccz_core import _core_auto, _core_equivalence
 
 
 def main() -> int:
@@ -33,7 +36,8 @@ def main() -> int:
 
     try:
         if mode == "ccz":
-            result = ccz._core.ccz_auto(  # pylint: disable=protected-access
+            result = _core_auto(
+                mode,
                 truth_table,
                 n_bits,
                 m_bits,
@@ -41,7 +45,8 @@ def main() -> int:
                 min_active_hyperplanes,
             )
         elif mode == "ccz_equivalence":
-            result = ccz._core.ccz_equivalence(  # pylint: disable=protected-access
+            result = _core_equivalence(
+                "ccz",
                 truth_table_f,
                 truth_table_g,
                 n_bits,
@@ -51,7 +56,8 @@ def main() -> int:
                 [] if auto_group is None else auto_group,
             )
         elif mode == "ea":
-            result = ccz._core.ea_auto(  # pylint: disable=protected-access
+            result = _core_auto(
+                mode,
                 truth_table,
                 n_bits,
                 m_bits,
@@ -59,7 +65,8 @@ def main() -> int:
                 min_active_hyperplanes,
             )
         elif mode == "ea_equivalence":
-            result = ccz._core.ea_equivalence(  # pylint: disable=protected-access
+            result = _core_equivalence(
+                "ea",
                 truth_table_f,
                 truth_table_g,
                 n_bits,
