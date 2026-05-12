@@ -55,9 +55,6 @@ def _auto_group_for_core(auto_group: Any, n_bits: int, m_bits: int) -> Any:
         return None
 
     candidate = auto_group
-    if isinstance(candidate, tuple) and len(candidate) == 2:
-        candidate = candidate[0]
-
     if isinstance(candidate, dict) and "generators" in candidate:
         return {"generators": candidate.get("generators") or []}
 

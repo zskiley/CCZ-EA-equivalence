@@ -35,9 +35,10 @@ Automorphism functions require Sage and return:
 
 `G` is a Sage `MatrixGroup` over `GF(2)` representing affine maps as
 homogeneous matrices, and `complete` reports whether the auto search finished
-before timeout. `G` or the full `(G, complete)` tuple can be passed back into
+before timeout. `G` can be passed back into
 `ccz.ccz_equivalence(..., right_auto=...)` or
-`ccz.ea_equivalence(..., right_auto=...)`.
+`ccz.ea_equivalence(..., right_auto=...)`; supplied groups are used as seeds
+without starting new automorphism searches for that equivalence call.
 
 Equivalence functions require Sage and return either `None` or a Sage matrix
 over `GF(2)` representing an affine equivalence. By default, equivalence races

@@ -4,6 +4,43 @@
 #include <utility>
 
 namespace gf2_linear {
+namespace {
+
+struct EchelonMaskRow {
+  uint32_t value = 0u;
+  uint64_t coeff_mask = 0u;
+};
+
+bool AddMaskRow(uint32_t value, uint64_t coeff_mask,
+                std::vector<EchelonMaskRow>* basis) {
+  if (basis == nullptr) return false;
+  for (const EchelonMaskRow& row : *basis) {
+    const int pivot_bit = MostSignificantBit(row.value);
+    if (pivot_bit >= 0 && (((value >> pivot_bit) & 1u) != 0u)) {
+      value ^= row.value;
+      coeff_mask ^= row.coeff_mask;
+    }
+  }
+  if (value == 0u) return false;
+
+  const int value_bit = MostSignificantBit(value);
+  std::size_t insert_at = 0;
+  while (insert_at < basis->size() &&
+         MostSignificantBit((*basis)[insert_at].value) > value_bit) {
+    ++insert_at;
+  }
+  basis->insert(basis->begin() + static_cast<std::ptrdiff_t>(insert_at),
+                EchelonMaskRow{value, coeff_mask});
+  for (std::size_t i = 0; i < basis->size(); ++i) {
+    if (i == insert_at) continue;
+    if ((((*basis)[i].value >> value_bit) & 1u) == 0u) continue;
+    (*basis)[i].value ^= value;
+    (*basis)[i].coeff_mask ^= coeff_mask;
+  }
+  return true;
+}
+
+}  // namespace
 
 int MostSignificantBit(uint32_t x) {
   for (int b = 31; b >= 0; --b) {
@@ -43,6 +80,49 @@ bool AddToEchelonBasis(uint32_t value, std::vector<uint32_t>* basis) {
 bool IsInSpan(const std::vector<uint32_t>& basis, uint32_t value) {
   ReduceWithBasis(basis, &value);
   return value == 0u;
+}
+
+std::vector<uint32_t> IntersectionBasis(const std::vector<uint32_t>& left,
+                                        const std::vector<uint32_t>& right) {
+  std::vector<EchelonMaskRow> combined_basis;
+  std::vector<uint32_t> intersection;
+
+  const auto add_combined = [&](uint32_t value, uint64_t coeff_mask) {
+    uint32_t reduced_value = value;
+    uint64_t reduced_coeff_mask = coeff_mask;
+    for (const EchelonMaskRow& row : combined_basis) {
+      const int pivot_bit = MostSignificantBit(row.value);
+      if (pivot_bit >= 0 && (((reduced_value >> pivot_bit) & 1u) != 0u)) {
+        reduced_value ^= row.value;
+        reduced_coeff_mask ^= row.coeff_mask;
+      }
+    }
+    if (reduced_value != 0u) {
+      (void)AddMaskRow(value, coeff_mask, &combined_basis);
+      return;
+    }
+
+    uint32_t intersection_vector = 0u;
+    for (std::size_t i = 0; i < left.size(); ++i) {
+      if (((reduced_coeff_mask >> i) & 1ull) != 0u) {
+        intersection_vector ^= left[i];
+      }
+    }
+    if (intersection_vector != 0u) {
+      (void)AddToEchelonBasis(intersection_vector, &intersection);
+    }
+  };
+
+  for (std::size_t i = 0; i < left.size(); ++i) {
+    add_combined(left[i], (1ull << static_cast<unsigned>(i)));
+  }
+  for (std::size_t i = 0; i < right.size(); ++i) {
+    const std::size_t bit = left.size() + i;
+    if (bit >= 64) break;
+    add_combined(right[i], (1ull << static_cast<unsigned>(bit)));
+  }
+
+  return intersection;
 }
 
 std::vector<uint32_t> ExtendToBasis(const std::vector<uint32_t>& basis,

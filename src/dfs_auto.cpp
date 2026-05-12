@@ -1,6 +1,6 @@
 #include "dfs_auto.h"
 
-#include "ambient_affine.h"
+#include "affine_kernel.h"
 #include "partition_branch.h"
 #include "groups/dfs_group_helpers.h"
 #include "groups/graph_point_perm.h"
@@ -164,12 +164,12 @@ void InitializeGroupSearch(const GraphData& F) {
   g_graph_point_index = std::move(index);
   g_global_generators.clear();
   g_global_affine_generators =
-      BuildKernelAffineGenerators(F, g_use_ea_validation);
+      BuildAffineKernelGenerators(F, g_use_ea_validation);
   g_global_group.emplace(F.points.size());
   g_global_group->SetGenerators({});
   g_global_group->Build();
   g_group_epoch = 0;
-  g_kernel_order = KernelAffineOrder(F, g_use_ea_validation);
+  g_kernel_order = AffineKernelOrder(F, g_use_ea_validation);
 }
 
 void AddInitialGroupGenerators(std::vector<groups::Permutation> generators) {

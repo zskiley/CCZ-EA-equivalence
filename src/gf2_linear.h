@@ -10,6 +10,8 @@ int MostSignificantBit(uint32_t x);
 void ReduceWithBasis(const std::vector<uint32_t>& basis, uint32_t* value);
 bool AddToEchelonBasis(uint32_t value, std::vector<uint32_t>* basis);
 bool IsInSpan(const std::vector<uint32_t>& basis, uint32_t value);
+std::vector<uint32_t> IntersectionBasis(const std::vector<uint32_t>& left,
+                                        const std::vector<uint32_t>& right);
 std::vector<uint32_t> ExtendToBasis(const std::vector<uint32_t>& basis,
                                     int dimension_bits);
 

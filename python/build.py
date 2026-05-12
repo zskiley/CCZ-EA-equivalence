@@ -104,7 +104,7 @@ def main() -> int:
         "src/dfs_equivalence.cpp",
         "src/quadratic.cpp",
         "src/dfs_auto.cpp",
-        "src/ambient_affine.cpp",
+        "src/affine_kernel.cpp",
         "src/partial_map.cpp",
         "src/gf2_linear.cpp",
         "src/partition_branch.cpp",

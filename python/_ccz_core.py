@@ -1,4 +1,4 @@
-"""Native binding loading and raw CCZ/EA wrappers."""
+"""Native binding loading and normalized-input CCZ/EA dispatch."""
 
 from __future__ import annotations
 
@@ -8,14 +8,6 @@ import shutil
 import subprocess
 import sys
 from typing import Any, Optional
-
-try:
-    from ._ccz_inputs import _normalize_function_input, _normalize_function_pair
-    from ._ccz_sage import _auto_group_for_core
-except ImportError:  # pragma: no cover - direct module import from python/
-    from _ccz_inputs import _normalize_function_input, _normalize_function_pair
-    from _ccz_sage import _auto_group_for_core
-
 
 _HERE = Path(__file__).resolve().parent
 
@@ -123,69 +115,3 @@ def _core_auto(
 ) -> dict[str, Any]:
     fn = _core.ccz_auto if mode == "ccz" else _core.ea_auto
     return fn(truth_table, n_bits, m_bits, time_limit, min_active_hyperplanes)
-
-
-def _raw_ccz_auto(
-    function_input: Any,
-    time_limit: Optional[float] = None,
-    min_active_hyperplanes: Optional[int] = None,
-) -> tuple[dict[str, Any], int, int]:
-    tt, n, m = _normalize_function_input(function_input)
-    result = _core.ccz_auto(tt, n, m, time_limit, min_active_hyperplanes)
-    return result, n, m
-
-
-def _raw_ea_auto(
-    function_input: Any,
-    time_limit: Optional[float] = None,
-    min_active_hyperplanes: Optional[int] = None,
-) -> tuple[dict[str, Any], int, int]:
-    tt, n, m = _normalize_function_input(function_input)
-    result = _core.ea_auto(tt, n, m, time_limit, min_active_hyperplanes)
-    return result, n, m
-
-
-def _raw_ccz_equivalence(
-    left_input: Any,
-    right_input: Any,
-    time_limit: Optional[float] = None,
-    min_active_hyperplanes: Optional[int] = None,
-    auto_group: Any = None,
-) -> tuple[Optional[dict[str, Any]], int, int]:
-    left_tt, right_tt, n, m = _normalize_function_pair(left_input, right_input)
-    core_auto_group = (
-        [] if auto_group is None else _auto_group_for_core(auto_group, n, m)
-    )
-    result = _core.ccz_equivalence(
-        left_tt,
-        right_tt,
-        n,
-        m,
-        time_limit,
-        min_active_hyperplanes,
-        core_auto_group,
-    )
-    return result, n, m
-
-
-def _raw_ea_equivalence(
-    left_input: Any,
-    right_input: Any,
-    time_limit: Optional[float] = None,
-    min_active_hyperplanes: Optional[int] = None,
-    auto_group: Any = None,
-) -> tuple[Optional[dict[str, Any]], int, int]:
-    left_tt, right_tt, n, m = _normalize_function_pair(left_input, right_input)
-    core_auto_group = (
-        [] if auto_group is None else _auto_group_for_core(auto_group, n, m)
-    )
-    result = _core.ea_equivalence(
-        left_tt,
-        right_tt,
-        n,
-        m,
-        time_limit,
-        min_active_hyperplanes,
-        core_auto_group,
-    )
-    return result, n, m

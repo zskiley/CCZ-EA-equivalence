@@ -67,7 +67,7 @@ ccz.ccz_auto(f)
 For bare truth tables, the wrapper infers `n` and assumes `m = n`. Use
 `(f, n, m)` for rectangular truth tables.
 
-Sage polynomials and `galois.Poly` inputs are passed directly:
+Sage polynomials are passed directly:
 
 ```python
 from sage.all import GF, PolynomialRing
@@ -148,6 +148,13 @@ T = ccz.ea_equivalence(
 )
 ```
 
+To reuse a precomputed automorphism group, pass the Sage group directly:
+
+```python
+AutH, complete = ccz.ccz_auto(H)
+T = ccz.ccz_equivalence(F, H, right_auto=AutH)
+```
+
 The return value is either:
 
 - `None`, if no equivalence is found, or
@@ -173,18 +180,16 @@ The auto-search switches can be booleans or precomputed groups:
 left = True        # compute the left auto group
 right = False      # skip the right auto group
 right = G          # use a supplied Sage MatrixGroup
-right = (G, True)  # use the tuple returned by ccz_auto / ea_auto
 ```
+
+When `left_auto` or `right_auto` is a supplied group, the wrapper uses it as a
+seed and does not start automorphism searches for that equivalence call.
 
 Examples:
 
 ```python
 # Run only the equivalence search.
 T = ccz.ccz_equivalence(F, H, left_auto=False, right_auto=False)
-
-# Precompute and reuse an automorphism group.
-AutH, complete = ccz.ccz_auto(H)
-T = ccz.ccz_equivalence(F, H, right_auto=AutH)
 
 # Disable subprocess orchestration.
 T = ccz.ccz_equivalence(F, H, parallel=False)
