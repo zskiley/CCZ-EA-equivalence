@@ -40,6 +40,7 @@ before timeout. `G` or the full `(G, complete)` tuple can be passed back into
 `ccz.ea_equivalence(..., right_auto=...)`.
 
 Equivalence functions require Sage and return either `None` or a Sage matrix
-over `GF(2)` representing an affine equivalence. By default, equivalence runs
-left auto, right auto, and an unseeded equivalence search in parallel; as auto
-groups finish, additional seeded equivalence searches are started.
+over `GF(2)` representing an affine equivalence. By default, equivalence races
+left auto, right auto, and an unseeded equivalence search in parallel. If an
+auto search finishes first, the other running tasks are stopped and one seeded
+equivalence search is started with that auto group.

@@ -793,6 +793,9 @@ def _auto_group_for_core(auto_group: Any, n_bits: int, m_bits: int) -> Any:
     if isinstance(candidate, tuple) and len(candidate) == 2:
         candidate = candidate[0]
 
+    if isinstance(candidate, dict) and "generators" in candidate:
+        return {"generators": candidate.get("generators") or []}
+
     if hasattr(candidate, "gens"):
         ambient_dimension = n_bits + m_bits
         return [
@@ -1053,11 +1056,11 @@ def _run_parallel_equivalence(
             right_auto,
             verbose,
             sage_constructors,
-        )
+    )
 
     tasks: list[dict[str, Any]] = []
-    left_seed, left_info = _supplied_auto_seed_and_info(left_auto, n_bits, m_bits)
-    right_seed, right_info = _supplied_auto_seed_and_info(right_auto, n_bits, m_bits)
+    left_seed, _left_info = _supplied_auto_seed_and_info(left_auto, n_bits, m_bits)
+    right_seed, _right_info = _supplied_auto_seed_and_info(right_auto, n_bits, m_bits)
 
     def launch_equivalence(name: str, seed: Any, swapped: bool = False) -> None:
         l_tt, r_tt = (right_tt, left_tt) if swapped else (left_tt, right_tt)
@@ -1079,6 +1082,36 @@ def _run_parallel_equivalence(
             )
         )
         _print_verbose(verbose, f"Started {name}")
+
+    def stop_remaining() -> None:
+        for remaining in tasks:
+            _stop_worker_task(remaining)
+            _cleanup_worker_task(remaining)
+        tasks.clear()
+
+    def run_seeded_after_auto(
+        name: str, seed: Any, *, swapped: bool = False
+    ):
+        seed = _auto_group_for_core(seed, n_bits, m_bits)
+        _print_verbose(verbose, f"Running {name}")
+        l_tt, r_tt = (right_tt, left_tt) if swapped else (left_tt, right_tt)
+        affine = _core_equivalence(
+            mode,
+            l_tt,
+            r_tt,
+            n_bits,
+            m_bits,
+            time_limit,
+            min_active_hyperplanes,
+            seed,
+        )
+        return _affine_result_to_sage_matrix(
+            affine,
+            n_bits,
+            m_bits,
+            sage_constructors,
+            invert=swapped,
+        )
 
     launch_equivalence("equivalence", right_seed)
     if left_seed is not None:
@@ -1124,76 +1157,54 @@ def _run_parallel_equivalence(
                 time.sleep(0.05)
                 continue
 
-            for task in finished:
-                tasks.remove(task)
-                ok, result = _read_worker_task(task)
-                _cleanup_worker_task(task)
-                if not ok:
-                    _print_verbose(
-                        verbose,
-                        f"{task['name']} failed: {result.get('error_message', result)}",
-                    )
-                    continue
+            equivalence_finished = [
+                task for task in finished if task["type"] == "equivalence"
+            ]
+            task = equivalence_finished[0] if equivalence_finished else finished[0]
 
-                if task["type"] == "equivalence":
-                    _print_verbose(verbose, f"{task['name']} finished")
-                    matrix_obj = _affine_result_to_sage_matrix(
-                        result,
-                        n_bits,
-                        m_bits,
-                        sage_constructors,
-                        invert=bool(task["swapped"]),
-                    )
-                    for remaining in tasks:
-                        _stop_worker_task(remaining)
-                        _cleanup_worker_task(remaining)
-                    return matrix_obj
-
-                if task["type"] == "auto_left":
-                    left_info = {
-                        "order": _auto_result_order(result),
-                        "complete": _auto_result_is_complete(result),
-                    }
-                    _print_verbose(
-                        verbose,
-                        f"Left auto finished with order {left_info['order']}",
-                    )
-                    if _auto_result_has_usable_seed(result):
-                        launch_equivalence(
-                            "left-seeded equivalence", result, swapped=True
-                        )
-                elif task["type"] == "auto_right":
-                    right_info = {
-                        "order": _auto_result_order(result),
-                        "complete": _auto_result_is_complete(result),
-                    }
-                    _print_verbose(
-                        verbose,
-                        f"Right auto finished with order {right_info['order']}",
-                    )
-                    if _auto_result_has_usable_seed(result):
-                        launch_equivalence("right-seeded equivalence", result)
-
-                if (
-                    left_info is not None
-                    and right_info is not None
-                    and left_info.get("complete")
-                    and right_info.get("complete")
-                    and left_info.get("order") is not None
-                    and right_info.get("order") is not None
-                    and left_info["order"] != right_info["order"]
-                ):
-                    _print_verbose(
-                        verbose, "Complete auto groups have different orders"
-                    )
-                    for remaining in tasks:
-                        _stop_worker_task(remaining)
-                        _cleanup_worker_task(remaining)
-                    return None
-    finally:
-        for task in tasks:
-            _stop_worker_task(task)
+            tasks.remove(task)
+            ok, result = _read_worker_task(task)
             _cleanup_worker_task(task)
+            if not ok:
+                _print_verbose(
+                    verbose,
+                    f"{task['name']} failed: {result.get('error_message', result)}",
+                )
+                continue
+
+            if task["type"] == "equivalence":
+                _print_verbose(verbose, f"{task['name']} finished")
+                matrix_obj = _affine_result_to_sage_matrix(
+                    result,
+                    n_bits,
+                    m_bits,
+                    sage_constructors,
+                    invert=bool(task["swapped"]),
+                )
+                stop_remaining()
+                return matrix_obj
+
+            if task["type"] == "auto_left":
+                left_order = _auto_result_order(result)
+                _print_verbose(
+                    verbose,
+                    f"Left auto finished with order {left_order}",
+                )
+                stop_remaining()
+                return run_seeded_after_auto(
+                    "left-seeded equivalence", result, swapped=True
+                )
+
+            if task["type"] == "auto_right":
+                right_order = _auto_result_order(result)
+                _print_verbose(
+                    verbose,
+                    f"Right auto finished with order {right_order}",
+                )
+                stop_remaining()
+                return run_seeded_after_auto("right-seeded equivalence", result)
+    finally:
+        stop_remaining()
 
     return None
 

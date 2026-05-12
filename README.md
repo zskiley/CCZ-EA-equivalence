@@ -22,37 +22,28 @@ import ccz
 f = [0, 1, 2, 3, 4, 5, 6, 7]
 g = [0, 1, 2, 3, 4, 5, 6, 7]
 
-F = (f, 3, 3)
-H = (g, 3, 3)
-
-AutF, complete = ccz.ea_auto(F)
-T = ccz.ea_equivalence(F, H, right_auto=AutF)
-
-print(AutF.order(), complete)
+T = ccz.ccz_equivalence(f, g)
 print(T is not None)
 ```
 
-Sage polynomial inputs are also accepted:
-
 ```python
 import ccz
-from sage.all import GF, PolynomialRing
 
-n = 8
-K = GF(2**n, name="a")
-R = PolynomialRing(K, "x")
-x = R.gen()
+f = [0, 1, 2, 3, 4, 5, 6, 7]
+g = [0, 1, 2, 3, 4, 5, 6, 7]
 
-AutF, complete = ccz.ccz_auto((x**3, n, n), time_limit=20)
+AutG, complete = ccz.ccz_auto(g)
 
-print(AutF.order())
+print(AutG.order())
 print(complete)
-print(AutF.gens())
+
+T = ccz.ccz_equivalence(f, g, right_auto=AutG)
+print(T is not None)
 ```
 
 ## Function Inputs
 
-The preferred input format is an explicit tuple:
+For truth tables and rectangular functions, use an explicit tuple:
 
 ```python
 F = (f, n, m)
@@ -65,20 +56,28 @@ dimension. This represents a function
 F : F_2^n -> F_2^m
 ```
 
-The function `f` may be:
+Here `f` is a truth table, as a sequence of `2^n` non-negative integers.
 
-- a truth table, as a sequence of `2^n` non-negative integers,
-- a Sage polynomial/callable over a binary field,
-- a `galois.Poly`.
-
-Bare function inputs are also accepted for convenience:
+Square truth tables can also be passed directly:
 
 ```python
 ccz.ccz_auto(f)
 ```
 
-For bare inputs, the wrapper infers `n` and assumes `m = n`. Use `(f, n, m)`
-for rectangular functions.
+For bare truth tables, the wrapper infers `n` and assumes `m = n`. Use
+`(f, n, m)` for rectangular truth tables.
+
+Sage polynomials and `galois.Poly` inputs are passed directly:
+
+```python
+from sage.all import GF, PolynomialRing
+
+K = GF(2**8, name="a")
+R = PolynomialRing(K, "x")
+x = R.gen()
+
+G, complete = ccz.ccz_auto(x**3)
+```
 
 Truth-table values are encoded as integers. The graph point for `x` is encoded
 internally as:
@@ -163,9 +162,10 @@ By default, equivalence starts three searches in parallel:
 - the left automorphism group search,
 - the right automorphism group search.
 
-As automorphism groups finish, the wrapper starts additional seeded equivalence
-searches. If the complete left and right automorphism groups finish with
-different orders, the wrapper returns `None`.
+The first successful task controls the next step. If the equivalence search
+finishes first, the wrapper stops the auto searches and returns that result. If
+one of the auto searches finishes first, the wrapper stops the other running
+tasks and starts one new equivalence search seeded by the finished auto group.
 
 The auto-search switches can be booleans or precomputed groups:
 
