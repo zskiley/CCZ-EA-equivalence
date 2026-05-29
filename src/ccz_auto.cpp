@@ -43,7 +43,11 @@ std::vector<GraphPointMap> RunAuto(const GraphData& F, bool ea_mode,
   InitializeGroupSearch(F);
   DfsGroupState root_group_state = MakeRootGroupState();
   uint32_t quadratic_anchor_point = 0u;
-  if (TryQuadraticAnchorPoint(F, &quadratic_anchor_point)) {
+  std::vector<groups::Permutation> translation_generators;
+  std::vector<AffineMapData> translation_affine_generators;
+  if (BuildQuadraticTranslationData(F, &quadratic_anchor_point,
+                                    &translation_generators,
+                                    &translation_affine_generators)) {
     uint32_t quadratic_anchor_index = 0u;
     (void)A0.Update(quadratic_anchor_point, quadratic_anchor_point);
     for (uint32_t i = 0; i < F.points.size(); ++i) {
@@ -54,11 +58,7 @@ std::vector<GraphPointMap> RunAuto(const GraphData& F, bool ea_mode,
     }
     (void)points_left.Individualize(quadratic_anchor_index);
     (void)points_right.Individualize(quadratic_anchor_index);
-    std::vector<groups::Permutation> translation_generators;
-    BuildQuadraticTranslationGenerators(F, &translation_generators);
     AddInitialGroupGenerators(std::move(translation_generators));
-    std::vector<AffineMapData> translation_affine_generators;
-    BuildQuadraticTranslationAffineGenerators(F, &translation_affine_generators);
     AddInitialAffineGenerators(std::move(translation_affine_generators));
     root_group_state = MakeRootGroupState();
     // After fixing the quadratic anchor in A, orbit pruning must use the

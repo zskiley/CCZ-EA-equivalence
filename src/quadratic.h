@@ -17,4 +17,9 @@ bool BuildQuadraticTranslationGenerators(
 bool BuildQuadraticTranslationAffineGenerators(
     const GraphData& F, std::vector<AffineMapData>* generators);
 
+bool BuildQuadraticTranslationData(
+    const GraphData& F, uint32_t* anchor_point,
+    std::vector<groups::Permutation>* translation_generators,
+    std::vector<AffineMapData>* translation_affine_generators);
+
 #endif
