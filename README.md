@@ -1,7 +1,7 @@
 # CCZ/EA Equivalence
 
 Algorithms for CCZ and EA automorphism groups and equivalence of vectorial
-Boolean functions.
+Boolean functions. From the paper "Efficiently deciding and recovering CCZ and EA equivalence for arbitrary vectorial Boolean functions using the partition refinement framework".
 
 The public Python API is Sage-first: automorphism groups are returned as Sage
 matrix groups, and equivalences are returned as Sage matrices over `GF(2)`.
